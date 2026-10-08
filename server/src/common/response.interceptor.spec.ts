@@ -1,17 +1,26 @@
 import { CallHandler, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { firstValueFrom, of } from 'rxjs';
 
 import { ErrorCode } from './error-code';
 import { ResponseInterceptor, withBizCode } from './response.interceptor';
 
-const ctx = {} as ExecutionContext;
+const ctx = {
+  getHandler: () => 'handler',
+  getClass: () => 'class',
+} as unknown as ExecutionContext;
 
 function handlerOf<T>(value: T): CallHandler<T> {
   return { handle: () => of(value) } as CallHandler<T>;
 }
 
+function interceptorOf(raw = false): ResponseInterceptor<unknown> {
+  const reflector = { getAllAndOverride: () => raw } as unknown as Reflector;
+  return new ResponseInterceptor<unknown>(reflector);
+}
+
 describe('ResponseInterceptor（契约 §0.2 / §0.5）', () => {
-  const interceptor = new ResponseInterceptor<unknown>();
+  const interceptor = interceptorOf();
 
   it('普通返回值包装成 {code:0,message:"ok",data}', async () => {
     const result = await firstValueFrom(
@@ -31,7 +40,10 @@ describe('ResponseInterceptor（契约 §0.2 / §0.5）', () => {
 
   it('分页形态原样透传（handler 自行组装 list/total/page/size）', async () => {
     const page = { list: [{ id: 1 }], total: 57, page: 1, size: 20 };
-    const result = await firstValueFrom(interceptor.intercept(ctx, handlerOf(page)));
+    const result = (await firstValueFrom(interceptor.intercept(ctx, handlerOf(page)))) as {
+      code: number;
+      data: typeof page;
+    };
     expect(result.data).toEqual(page);
   });
 
@@ -51,7 +63,20 @@ describe('ResponseInterceptor（契约 §0.2 / §0.5）', () => {
 
   it('不会有 __bizCode/__bizMessage 泄漏到 data 里', async () => {
     const payload = withBizCode(3003, { idempotent_repeated: true });
-    const result = await firstValueFrom(interceptor.intercept(ctx, handlerOf(payload)));
-    expect(Object.keys(result.data as object)).toEqual(['idempotent_repeated']);
+    const result = (await firstValueFrom(interceptor.intercept(ctx, handlerOf(payload)))) as {
+      data: Record<string, unknown>;
+    };
+    expect(Object.keys(result.data)).toEqual(['idempotent_repeated']);
+  });
+
+  it('@RawResponse() 接口原样透传（§1.5 JWKS 与 §6 CSV 不被套壳）', async () => {
+    const jwks = { keys: [{ kty: 'RSA', kid: 'portal-2026-10' }] };
+    const raw = await firstValueFrom(interceptorOf(true).intercept(ctx, handlerOf(jwks)));
+    expect(raw).toEqual(jwks);
+    expect(raw).not.toHaveProperty('code');
+
+    const csv = '\uFEFFid,bill_no\n1,recharge:1';
+    const rawCsv = await firstValueFrom(interceptorOf(true).intercept(ctx, handlerOf(csv)));
+    expect(rawCsv).toBe(csv);
   });
 });

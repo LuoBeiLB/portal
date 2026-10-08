@@ -2,13 +2,18 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { Public } from './common/public.decorator';
 import { PortalConfigService } from './config/portal-config.service';
 
 /**
- * 探活与元信息（挂在 `/api` 前缀下，与契约 §0.1 的对外路径一致）。
- * `/api/healthz` 供 nginx / 容器探活。
+ * 探活与元信息。挂在全局 `/api` 前缀下，实际路径为 `/api/healthz`、`/api/meta`。
+ * ⚠️ 不要在这里再写 @Controller('api')，否则路径会叠加成 /api/api/*。
+ *
+ * 两个接口都标 @Public()：探活是给 nginx / 容器用的，不带用户 token。
+ * 其中 meta 只暴露服务名、契约版本、kid 与产品代码，不含密钥，供排障比对。
  */
-@Controller('api')
+@Public()
+@Controller()
 export class AppController {
   constructor(
     private readonly config: PortalConfigService,

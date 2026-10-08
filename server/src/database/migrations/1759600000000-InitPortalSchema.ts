@@ -1,11 +1,13 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * 门户库初始化建表（MySQL 8.0 · 金额一律 store 为「分」）。
+ * 门户库初始化建表（金额一律以「分」存储）。
  *
- * 依据：[04-门户下一版方案_架构与ER.md] §2 表结构，与《云平台统一门户 API 契约 v1.0》逐条对齐。
+ * 依据：《04-门户下一版方案_架构与ER.md》§2 表结构，与《云平台统一门户 API 契约 v1.0》逐条对齐。
  * 说明：
- * - 全库 utf8mb4_0900_ai_ci（MySQL 8 默认排序规则）。
+ * - 字符集 utf8mb4 + 排序规则 `utf8mb4_general_ci`：**MySQL 5.7 与 8.0 都支持**。
+ *   注意别用 `utf8mb4_0900_ai_ci`（8.0 专属）：在 5.7 上不会报错，而是**静默降级**成
+ *   utf8mb4_general_ci，导致不同环境实际的排序规则不一致（已实测踩到）。
  * - 时间为 DATETIME(3)，应用侧统一按 UTC 存取。
  * - `w_transaction` 只增不改不删，是对账唯一依据。
  * - 门户**不建** `portal_user_map` / `b_bill`：那两张表属于各产品库（跨库，结构由产品自定）。
