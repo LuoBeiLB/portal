@@ -24,6 +24,13 @@ export interface ProductEndpoint {
   baseUrl: string;
   /** 产品侧调用门户时要带的静态密钥（每产品一码），仅内网可用 */
   internalKey: string;
+  /**
+   * 是否参与同步与开通。
+   * 一期只接云存储，phone / desktop 还没实现，地址留空 → `enabled = false`，
+   * 不参与商品同步（否则每轮都刷 `ECONNREFUSED` 噪音日志）。
+   * 二期接入时把 URL 与密钥填上即自动启用。
+   */
+  enabled: boolean;
 }
 
 export interface AppConfig {
@@ -86,6 +93,15 @@ export interface ShopConfig {
   provisionTimeoutMs: number;
   /** 调产品商品目录的超时（毫秒） */
   productTimeoutMs: number;
+  /**
+   * 开通任务的单轮处理上限（条）。
+   * 契约里 provision 单次超时 30s，处理是串行的，所以最坏耗时 ≈ 上限 × 30s。
+   */
+  provisionBatchSize: number;
+  /** 开通任务失败后的最大尝试次数（含首次）；用尽后置为 failed，人工/对账介入 */
+  provisionMaxAttempts: number;
+  /** 认领中的任务超过该毫秒数视为「卡死」，可被重新认领（进程中途被杀的保护） */
+  provisionStaleMs: number;
 }
 
 export interface WalletConfig {
@@ -154,23 +170,33 @@ function loadProducts(): ProductEndpoint[] {
       code: 'phone',
       envBase: 'PRODUCT_PHONE_BASE_URL',
       envKey: 'PRODUCT_PHONE_INTERNAL_KEY',
-      fallbackBase: 'http://127.0.0.1:8000',
+      fallbackBase: '',
     },
     {
       code: 'desktop',
       envBase: 'PRODUCT_DESKTOP_BASE_URL',
       envKey: 'PRODUCT_DESKTOP_INTERNAL_KEY',
-      fallbackBase: 'http://127.0.0.1:9000',
+      fallbackBase: '',
     },
+    // 下面两项不在契约的产品列表里，仅用于配置规则的单测
+    // （需要在 .env 里配地址才会启用，生产永远不会出现）
+    { code: 'testa', envBase: 'PRODUCT_TESTA_BASE_URL', envKey: 'PRODUCT_TESTA_INTERNAL_KEY', fallbackBase: '' },
+    { code: 'testb', envBase: 'PRODUCT_TESTB_BASE_URL', envKey: 'PRODUCT_TESTB_INTERNAL_KEY', fallbackBase: '' },
   ];
 
   return defaults
-    .map((item) => ({
-      code: item.code,
-      baseUrl: (process.env[item.envBase] ?? item.fallbackBase).replace(/\/+$/, ''),
-      internalKey: process.env[item.envKey] ?? '',
-    }))
-    .filter((item) => item.baseUrl.length > 0);
+    .map((item) => {
+      const baseUrl = (process.env[item.envBase] ?? '').trim().replace(/\/+$/, '');
+      const internalKey = process.env[item.envKey] ?? '';
+      return {
+        code: item.code,
+        baseUrl,
+        internalKey,
+        // 地址留空即视为「未接入」：不参与同步，也不在日志里刷连接错误
+        enabled: baseUrl.length > 0,
+      };
+    })
+    .filter((item) => item.enabled);
 }
 
 export function loadConfig(): PortalConfig {
@@ -243,6 +269,9 @@ export function loadConfig(): PortalConfig {
       phoneMaxQuantity: int(process.env.PHONE_MAX_QUANTITY, 3),
       provisionTimeoutMs: int(process.env.PROVISION_TIMEOUT_MS, 30_000),
       productTimeoutMs: int(process.env.PRODUCT_TIMEOUT_MS, 10_000),
+      provisionBatchSize: int(process.env.PROVISION_BATCH_SIZE, 20),
+      provisionMaxAttempts: int(process.env.PROVISION_MAX_ATTEMPTS, 3),
+      provisionStaleMs: int(process.env.PROVISION_STALE_MS, 5 * 60 * 1000),
     },
     wallet: {
       rechargeMinCents: int(process.env.RECHARGE_MIN_CENTS, 100),

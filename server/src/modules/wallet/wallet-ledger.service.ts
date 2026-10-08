@@ -104,6 +104,64 @@ export class WalletLedgerService {
     });
   }
 
+  /**
+   * 在**调用方已有的 MySQL 事务内**扣费。
+   *
+   * 用途：订单支付的「扣费 + 订单项状态 + 入队开通任务」必须原子提交 ——
+   * 否则可能出现「钱扣了但订单项没更新」这种最糟糕的中间态。
+   * 因此把扣费逻辑暴露成可传入 manager 的版本。
+   */
+  async deductWithin(
+    manager: EntityManager,
+    input: {
+      userId: string;
+      billNo: string;
+      amountCents: number;
+      productCode: string | null;
+      detail?: Record<string, unknown> | null;
+    },
+  ): Promise<DeductResult> {
+    if (input.amountCents <= 0) {
+      throw new BizException(ErrorCode.PARAM_INVALID, 'amount_cents 必须大于 0');
+    }
+
+    const existing = await manager.findOne(TransactionEntity, { where: { billNo: input.billNo } });
+    if (existing) {
+      return { balanceAfter: existing.balanceAfter, transactionId: existing.id, idempotentRepeated: true };
+    }
+
+    const updated = await manager
+      .createQueryBuilder()
+      .update(WalletEntity)
+      .set({ balanceCents: () => `balance_cents - ${input.amountCents}` })
+      .where('user_id = :userId AND status = :status AND balance_cents >= :amount', {
+        userId: input.userId,
+        status: WalletStatus.NORMAL,
+        amount: input.amountCents,
+      })
+      .execute();
+
+    if (Number(updated.affected ?? 0) === 0) {
+      const wallet = await manager.findOne(WalletEntity, { where: { userId: input.userId } });
+      if (!wallet) throw new BizException(ErrorCode.INTERNAL_ERROR, '钱包不存在');
+      if (wallet.status === WalletStatus.FROZEN) throw new BizException(ErrorCode.WALLET_FROZEN);
+      throw new BizException(ErrorCode.INSUFFICIENT_BALANCE, undefined, { balance: Number(wallet.balanceCents) });
+    }
+
+    const wallet = await manager.findOneOrFail(WalletEntity, { where: { userId: input.userId } });
+    const txn = await this.insertTransaction(manager, {
+      userId: input.userId,
+      type: TransactionType.DEDUCT,
+      amountCents: input.amountCents,
+      balanceAfter: wallet.balanceCents,
+      billNo: input.billNo,
+      productCode: input.productCode,
+      detail: input.detail ?? null,
+    });
+
+    return { balanceAfter: wallet.balanceCents, transactionId: txn.id, idempotentRepeated: false };
+  }
+
   /** 退款（契约 §4.2）：原单必须已入账；累计退款不得超过原单金额。userId 可省略（从原单反查） */
   async refund(input: {
     userId?: string;

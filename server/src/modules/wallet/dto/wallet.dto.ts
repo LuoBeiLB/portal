@@ -1,14 +1,17 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /** 查询参数统一按契约 §0.4：`?page=1&size=20` */
 export class PageQueryDto {
+  @ApiPropertyOptional({ description: '页码，从 1 开始', example: 1, minimum: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page: number = 1;
 
+  @ApiPropertyOptional({ description: '每页条数（上限 100）', example: 20, minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -16,7 +19,7 @@ export class PageQueryDto {
   @Max(100)
   size: number = 20;
 
-  /** 兼容 `page_size` / `limit` 两种常见写法（映射到 size） */
+  @ApiPropertyOptional({ description: '每页条数的别名（兼容 page_size / limit 写法）', example: 20 })
   @IsOptional()
   @Transform(({ value }) => (value === undefined || value === null || value === '' ? undefined : Number(value)))
   @IsInt()
@@ -35,12 +38,14 @@ export class PageQueryDto {
 
 /** 契约 §3.2 流水查询过滤：type 与 product_code 均可选 */
 export class TransactionQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ description: '流水类型', enum: [1, 2, 3, 4], example: 2 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @IsIn([1, 2, 3, 4], { message: 'type 只能是 1充值 2扣费 3退款 4调账' })
   type?: number;
 
+  @ApiPropertyOptional({ description: '产品代码过滤', enum: ['storage', 'phone', 'desktop'], example: 'storage' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
@@ -49,12 +54,19 @@ export class TransactionQueryDto extends PageQueryDto {
 
 /** 契约 §3.3 充值申请入参 */
 export class RechargeApplyDto {
+  @ApiProperty({
+    description: '充值金额，单位：分（100 ~ 10,000,000，即 ¥1 ~ ¥10万）',
+    example: 10000,
+    minimum: 100,
+    maximum: 10_000_000,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(100)
   @Max(10_000_000)
   amount_cents!: number;
 
+  @ApiPropertyOptional({ description: '转账备注 / 凭证说明（供管理员核销时核对）', example: '微信转账，尾号1234' })
   @IsOptional()
   @IsString()
   @MaxLength(255)
@@ -63,10 +75,12 @@ export class RechargeApplyDto {
 
 /** 契约 §6.2 核销入参：`reject: true` 表示驳回 */
 export class ConfirmRechargeDto {
+  @ApiPropertyOptional({ description: 'true = 驳回；缺省或 false = 确认到账', example: false, default: false })
   @IsOptional()
   @IsBoolean()
   reject?: boolean;
 
+  @ApiPropertyOptional({ description: '驳回原因（驳回时建议填写）', example: '未收到对应转账' })
   @IsOptional()
   @IsString()
   @MaxLength(255)
@@ -75,6 +89,7 @@ export class ConfirmRechargeDto {
 
 /** 契约 §6 充值核销队列查询：`?status=0`（0 待核销 / 1 已到账 / 2 驳回），缺省不过滤 */
 export class RechargeQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ description: '充值单状态过滤', enum: [0, 1, 2], example: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

@@ -29,12 +29,46 @@
 | §4.2 | `POST /api/wallet/refund`（累计退款校验 3004 / 原单不存在 3005） | ✅ |
 | §6 | `GET /api/admin/recharges`、`POST /api/admin/recharges/:id/confirm`、`GET /api/admin/transactions/export`（CSV） | ✅ |
 | §0.2 / §0.6 | 统一响应壳 + 16 个错误码 | ✅ |
+| 文档 | **OpenAPI / Swagger**：`/api/docs`（UI）+ `/api/docs-json`（导入 Apifox）；另有离线导出 `docs/openapi.json` | ✅ |
 
-### 第 3 轮 · 商城与开通（未开始）
-商品目录同步（§5.1）· 创建订单 / 订单详情 / 支付（§2）· 调产品 `POST /internal/provision` + 失败自动退款 · 支付异步化 · 日对账（§6）。
+### 第 3 轮 · 商城与开通 ✅（端到端 53 项 + 退款路径 19 项全通过）
+
+| 契约章节 | 接口 | 状态 |
+|---|---|---|
+| §2.1 | `GET /api/shop/products` 商品列表（只返回在售；stock 为 null = 现货） | ✅ |
+| §2.2 | `POST /api/shop/orders` 创建订单（**逐项校验 + 后端重算价格**） | ✅ |
+| §2.3 | `GET /api/shop/orders/:id` 订单详情（按项返回状态） | ✅ |
+| §2.4 | `POST /api/shop/orders/:id/pay` 支付（**逐项扣费同步 + 开通异步**） | ✅ |
+| §5.1 | 商品目录同步（每 10 分钟全量 upsert，10 分钟级调价生效；不再上报的 sku 软下架） | ✅ |
+| §5.2 | `POST /internal/provision` 调用（幂等键 `order_item_id`，30s 超时，失败重试 → 用尽自动退款） | ✅ |
+| §6 | 日对账：产品账单上报 + 逐笔比对（仅产品侧 / 仅门户侧 / 金额不符）+ 手动补跑 | ✅ |
+| 契约外补充 | `GET /api/shop/orders` 我的订单列表、`POST /api/internal/reconciliation/report` 账单上报 | ✅ |
 
 ### 尚未实现
-前端（Vue 3，另外一个仓）· nginx 配置 · `u_user.role` 与真正的管理端角色校验（当前管理端走 `X-Admin-Key` 静态密钥，契约 §6 允许）。
+前端（Vue 3，前端团队自建两个仓）· nginx 配置 · `u_user.role` 与真正的管理端角色校验（当前管理端走 `X-Admin-Key` 静态密钥，契约 §6 允许）。
+
+---
+
+> **支付为什么不是同步的**：契约 §2.4 写的是「逐项串行：扣费 → 调 provision(30s) → 失败退款」，若在 HTTP 请求里等，
+> 并发几单就会把连接池和用户耐心一起耗光。本实现**严格保留契约的幂等键与状态语义**（`bill_no = order:{order_id}:item:{item_id}`、
+> 余额不足即停止、已成功项保留、已完成订单再支付返回 4002），但把 provision 拆到后台 worker，
+> 响应里已受理项状态为 `1 已支付`，前端**轮询订单详情**拿最终结果（`2 开通成功` / `4 已退款`）。
+
+---
+
+## 接口文档（给前端 / 产品侧联调）
+
+三种拿法，按需选：
+
+| 方式 | 地址 / 命令 | 说明 |
+|---|---|---|
+| Swagger UI | `http://127.0.0.1:3000/api/docs` | 可交互，能直接填 token 试接口（`SWAGGER_ENABLED=true` 时才有，**生产默认关闭**） |
+| OpenAPI JSON（在线） | `http://127.0.0.1:3000/api/docs-json` | Apifox / Postman 可直接"导入 URL" |
+| OpenAPI JSON（离线文件） | `docs/openapi.json`（已提交） | 不起后端也能导入；改完接口用 `node scripts/export-openapi.cjs` 重新生成 |
+
+文档里已声明三套鉴权方案：`bearer`（用户端）、`internal-key`（§4 产品 → 门户）、`admin-key`（§6 管理端）。
+
+> 注意：`/.well-known/jwks.json` 返回的是**标准 JWKS**，`/api/admin/transactions/export` 返回 **CSV**，这两者不套 `{code,message,data}` 壳，文档里已标注。
 
 ---
 
@@ -70,8 +104,13 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
 | `npm test` | 单元测试（37 项，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | **端到端自验**（64 项，需先起服务与数据库） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（73 项：认证 / 钱包 / 核销 / 内网计费 / OpenAPI） |
+| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（53 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
+| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（19 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
+| `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
+| `node scripts/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
 | `node scripts/probe-mysql.cjs` | 探测目标 MySQL 版本 / 排序规则 / 已有表 |
+| `node scripts/reset-products.cjs` | 清空商品缓存（只动 `p_product*`，不碰用户与钱包） |
 | `npm run lint` | ESLint |
 
 ---
@@ -90,9 +129,24 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
    影响行数 = 0 即余额不足/冻结；因此钱包表**不设 version 乐观锁列**。
 6. **充值核销用条件更新** `WHERE id=? AND status=0` 抢占状态，赢家才动钱（防两个管理员同时点通过导致重复增额）。
 7. **用户 ID 全系统统一 `CHAR(36)`**（UUIDv7 字符串），不做 `BINARY(16)` 转换。
+7.1 **支付逐项扣费**：`bill_no = order:{order_id}:item:{item_id}`（契约 §2.4 原文），并在流水上带 `product_code` 便于对账归集；某一项余额不足即**停止处理后续项**，已成功项保留。
+7.2 **开通与扣费解耦**：扣费在 HTTP 请求内完成（用户要知道钱够不够），provision 交给 `ProvisionWorker` 后台推进；契约的幂等键与状态语义全部保留。
 8. **门户不直连任何产品数据库**；跨系统只走契约里的 HTTP 接口（内网 + `X-Internal-Key`）。
-9. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
+9. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund`、`/api/internal/reconciliation/report` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
 10. 密钥、密码、AK **不进仓库**：`.env` 与 `keys/` 已被 `.gitignore` 忽略。
+
+## 开通 worker（第 3 轮新增）
+
+`ProvisionWorker` 每 3 秒扫一次 `o_provision_job`，逐条调产品 `POST /internal/provision`：
+
+| 机制 | 说明 |
+|---|---|
+| 认领原子性 | 条件更新 `pending → processing`，多实例不会重复处理同一条 |
+| 卡死恢复 | `processing` 超过 `PROVISION_STALE_MS`（默认 5 分钟）自动重新入队（进程被杀的兜底） |
+| 重试策略 | 业务失败（4003/4004）**不重试**；系统失败（超时/5xx）重试到 `PROVISION_MAX_ATTEMPTS`（默认 3） |
+| 失败退款 | 用尽次数 → 自动调 `refund`，退款单号 `refund:{order_item_id}:{attempts}` 保证不重复退 |
+| 退款再失败 | 订单项置 `3 失败待退款` 交给对账，**绝不留"钱扣了没人管"** |
+| 排障 | `GET /api/admin/reconciliation/provision-jobs` 看各状态堆积量 |
 
 ## 环境要求与坑
 
@@ -104,6 +158,10 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 | argon2 | 原生模块，安装时需编译。受限环境可用 `npm install --ignore-scripts` 装依赖做类型检查，但**运行时加载会失败** |
 
 > ⚠️ **字符集坑（已踩并修）**：迁移里别写 `utf8mb4_0900_ai_ci`（MySQL 8.0 专属）。在 5.7 上它**不报错**，而是静默降级成 `utf8mb4_general_ci`，导致不同环境实际排序规则不一致。现统一用 `utf8mb4_general_ci`。
+
+> ⚠️ **`process.loadEnvFile` 的空值语义**：它把「`KEY=`」视为**未设置**，不会用空串覆盖已有环境变量。所以想把某产品设为"未接入"，要**删掉那一行或注释掉**，而不是留空值（留空值在部分环境下会被误认为设过）。
+
+> ⚠️ **自验脚本必须清端口**：反复手工起服务最容易踩 `EADDRINUSE` —— 表现是「测试打到了上一次的旧进程」，错误信息却完全不指向端口。`run-e2e-*.ps1` 已经做了清理，手工起服务时记得先杀干净。
 
 ## 目录结构
 
@@ -125,21 +183,25 @@ src/
 │  ├─ crypto.util.ts           # uuidv7 / randomToken / sha256 / safeEqual
 │  └─ request.util.ts          # Bearer 解析 / 客户端 IP
 ├─ config/
-│  ├─ configuration.ts         # 环境变量 → 类型化配置
+│  ├─ configuration.ts         # 环境变量 → 类型化配置（含"未接入产品"的 enabled 判定）
 │  ├─ portal-config.service.ts
+│  ├─ swagger.setup.ts         # OpenAPI 文档（/api/docs）+ @RawResponse 说明
 │  └─ token.module.ts          # JWT 签发（RS256；缺私钥启动即失败）
 ├─ database/
-│  ├─ entities.ts              # 9 张表实体清单（连接与迁移共用）
+│  ├─ entities.ts              # 11 张表实体清单（连接与迁移共用）
 │  ├─ data-source.ts           # TypeORM CLI / 迁移专用
-│  └─ migrations/1759600000000-InitPortalSchema.ts
+│  └─ migrations/
+│     ├─ 1759600000000-InitPortalSchema.ts        # 9 张表
+│     ├─ 1759700000000-ShopAndProvision.ts        # 开通任务队列 + 账单上报 + o_order.paying_at
+│     └─ 1759700001000-ReconciliationDiffColumns.ts # 对账差异分类列
 └─ modules/
    ├─ auth/                    # §1 认证 + JWKS（password / token / jwks service）
    ├─ wallet/                  # §3 钱包 + §6 管理端（wallet-ledger 是资金唯一入口）
    ├─ internal/                # §4 内网计费（deduct / refund）
    ├─ user/                    # u_user 实体
-   ├─ product/                 # p_product / 同步日志（第 3 轮用）
-   ├─ order/                   # o_order / o_order_item（第 3 轮用）
-   └─ reconciliation/          # r_reconciliation（第 3 轮用）
-scripts/                       # 密钥生成 / MySQL 探测 / 端到端自验
+   ├─ product/                 # §5.1 商品目录同步 + ProductClient（门户外呼产品的唯一出口）
+   ├─ order/                   # §2 商城与订单 + ProvisionWorker（§5.2 开通与自动退款）
+   └─ reconciliation/          # §6 账单上报 + 日对账
+scripts/                       # 密钥生成 / MySQL 探测 / OpenAPI 导出 / 产品桩 / 端到端自验
 docker-compose.yml             # 本地 MySQL 8 + Redis 7
 ```

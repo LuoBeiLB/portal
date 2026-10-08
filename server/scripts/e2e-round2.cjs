@@ -12,7 +12,7 @@
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
-const INTERNAL_KEY = process.env.PRODUCT_STORAGE_INTERNAL_KEY || 'local-dev-storage-key';
+const INTERNAL_KEY = process.env.PRODUCT_STORAGE_INTERNAL_KEY || 'stub-storage-key';
 
 let passed = 0;
 let failed = 0;

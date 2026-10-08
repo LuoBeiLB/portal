@@ -1,44 +1,31 @@
+/**
+ * 配置装载测试。
+ *
+ * 注意：这些用例**不依赖运行环境**。
+ * 原因：应用会在启动时 `process.loadEnvFile('.env')`，而 loadEnvFile 把「空值」视为未设置
+ * （不会用空串覆盖已有变量）。若测试直接断言"某产品没配地址"，会被本机 .env 污染。
+ * 因此这里用无关的空前缀变量（未在 .env 中出现）来验证规则本身。
+ */
+process.env.NODE_ENV = 'test';
+process.env.JWT_ISSUER = 'cloud-portal';
+process.env.JWT_ACCESS_TTL = '';
+process.env.JWT_REFRESH_TTL = '';
+process.env.PROVISION_TIMEOUT_MS = '';
+process.env.PRODUCT_SYNC_INTERVAL_MS = '';
+process.env.PHONE_MAX_QUANTITY = '';
+process.env.RECHARGE_MIN_CENTS = '';
+process.env.RECHARGE_MAX_CENTS = '';
+process.env.WALLET_RETRY_BACKOFF_MS = '';
+process.env.MAX_ITEMS_PER_ORDER = '';
+// 只有这两个变量未在 .env 中出现，可安全用于「未接入 → 被剔除」的断言
+process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
+process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a';
+delete process.env.PRODUCT_TESTB_BASE_URL;
+delete process.env.PRODUCT_TESTB_INTERNAL_KEY;
+
 import { loadConfig } from './configuration';
 
-const KEYS = [
-  'NODE_ENV',
-  'APP_PORT',
-  'DB_HOST',
-  'DB_PORT',
-  'DB_POOL_SIZE',
-  'REDIS_HOST',
-  'REDIS_PORT',
-  'JWT_KID',
-  'JWT_ISSUER',
-  'JWT_ACCESS_TTL',
-  'JWT_REFRESH_TTL',
-  'PRODUCT_SYNC_INTERVAL_MS',
-  'PROVISION_TIMEOUT_MS',
-  'PHONE_MAX_QUANTITY',
-  'RECHARGE_MIN_CENTS',
-  'RECHARGE_MAX_CENTS',
-  'WALLET_RETRY_BACKOFF_MS',
-  'PRODUCT_STORAGE_BASE_URL',
-  'PRODUCT_STORAGE_INTERNAL_KEY',
-] as const;
-
 describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', () => {
-  const saved: Record<string, string | undefined> = {};
-
-  beforeAll(() => {
-    KEYS.forEach((key) => {
-      saved[key] = process.env[key];
-      delete process.env[key];
-    });
-  });
-
-  afterAll(() => {
-    KEYS.forEach((key) => {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    });
-  });
-
   it('缺省值与契约一致：端口 3000 / access 2h / refresh 14d / provision 30s', () => {
     const config = loadConfig();
     expect(config.app.port).toBe(3000);
@@ -58,30 +45,31 @@ describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', (
     expect(config.wallet.retryBackoffMs).toEqual([1000, 5000, 30000]);
   });
 
-  it('产品列表默认含 storage / phone / desktop 三个 code', () => {
-    const codes = loadConfig().products.map((item) => item.code);
-    expect(codes).toEqual(['storage', 'phone', 'desktop']);
+  it('规则：地址非空的产品才进列表；地址为空的被剔除（不参与同步、不刷连接错误）', () => {
+    const config = loadConfig();
+    const testA = config.products.find((item) => item.code === 'testa');
+    expect(testA?.enabled).toBe(true);
+    expect(testA?.baseUrl).toBe('http://127.0.0.1:8111');
+    expect(testA?.internalKey).toBe('k-a');
+    // 未配地址的产品不应出现
+    expect(config.products.some((item) => item.code === 'testb')).toBe(false);
+    // 列表里的每一项都必须可用
+    expect(config.products.every((item) => item.enabled && item.baseUrl.length > 0)).toBe(true);
   });
 
   it('环境变量覆盖生效，且 baseUrl 末尾斜杠被规范化', () => {
-    process.env.NODE_ENV = 'production';
     process.env.APP_PORT = '3100';
-    process.env.PRODUCT_STORAGE_BASE_URL = 'http://192.168.99.100:8080///';
-    process.env.PRODUCT_STORAGE_INTERNAL_KEY = 'k-storage';
+    process.env.PRODUCT_TESTA_BASE_URL = 'http://192.168.99.100:8080///';
     process.env.WALLET_RETRY_BACKOFF_MS = '2000, 6000';
 
     const config = loadConfig();
-    expect(config.app.env).toBe('production');
     expect(config.app.port).toBe(3100);
-    const storage = config.products.find((item) => item.code === 'storage');
-    expect(storage?.baseUrl).toBe('http://192.168.99.100:8080');
-    expect(storage?.internalKey).toBe('k-storage');
+    const testA = config.products.find((item) => item.code === 'testa');
+    expect(testA?.baseUrl).toBe('http://192.168.99.100:8080');
     expect(config.wallet.retryBackoffMs).toEqual([2000, 6000]);
 
-    delete process.env.NODE_ENV;
+    process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
     delete process.env.APP_PORT;
-    delete process.env.PRODUCT_STORAGE_BASE_URL;
-    delete process.env.PRODUCT_STORAGE_INTERNAL_KEY;
     delete process.env.WALLET_RETRY_BACKOFF_MS;
   });
 
@@ -95,12 +83,17 @@ describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', (
     expect(config.app.port).toBe(3000);
     expect(config.database.port).toBe(3306);
 
-    delete process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
     delete process.env.APP_PORT;
     delete process.env.DB_PORT;
   });
 
   it('未配置密钥时不抛异常（留给调用期报错，避免服务起不来）', () => {
+    delete process.env.JWT_PRIVATE_KEY;
+    delete process.env.JWT_PUBLIC_KEY;
+    delete process.env.JWT_PRIVATE_KEY_FILE;
+    delete process.env.JWT_PUBLIC_KEY_FILE;
+
     const config = loadConfig();
     expect(config.jwt.current.privateKey).toBe('');
     expect(config.jwt.current.publicKey).toBe('');

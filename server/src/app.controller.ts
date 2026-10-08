@@ -1,3 +1,4 @@
+import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -12,6 +13,7 @@ import { PortalConfigService } from './config/portal-config.service';
  * 两个接口都标 @Public()：探活是给 nginx / 容器用的，不带用户 token。
  * 其中 meta 只暴露服务名、契约版本、kid 与产品代码，不含密钥，供排障比对。
  */
+@ApiTags('运维 ops')
 @Public()
 @Controller()
 export class AppController {
@@ -20,6 +22,10 @@ export class AppController {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
+  @ApiOperation({
+    summary: '探活（运维）',
+    description: '供 nginx / 容器探活。`data.status`：ok=数据库可达；degraded=数据库不可达。无需鉴权。',
+  })
   @Get('healthz')
   async health(): Promise<Record<string, unknown>> {
     let database = 'down';
@@ -37,6 +43,10 @@ export class AppController {
     };
   }
 
+  @ApiOperation({
+    summary: '服务元信息（运维）',
+    description: '返回服务名、契约版本、JWT issuer 与 kid、各产品接入代码。**不含任何密钥**，供排障比对。',
+  })
   @Get('meta')
   meta(): Record<string, unknown> {
     return {

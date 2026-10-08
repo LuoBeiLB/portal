@@ -37,6 +37,15 @@ export class OrderEntity {
   @Column({ name: 'paid_at', type: 'datetime', precision: 3, nullable: true })
   paidAt!: Date | null;
 
+  @Column({
+    name: 'paying_at',
+    type: 'datetime',
+    precision: 3,
+    nullable: true,
+    comment: '进入开通阶段的时刻（用于判定"卡在开通中"）',
+  })
+  payingAt!: Date | null;
+
   @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
   updatedAt!: Date;
 }

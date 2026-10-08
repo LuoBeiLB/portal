@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AppController } from './app.controller';
@@ -15,6 +16,9 @@ import { TokenModule } from './config/token.module';
 import { PORTAL_ENTITIES } from './database/entities';
 import { AuthModule } from './modules/auth/auth.module';
 import { InternalModule } from './modules/internal/internal.module';
+import { OrderModule } from './modules/order/order.module';
+import { ProductModule } from './modules/product/product.module';
+import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 
 /**
@@ -23,13 +27,14 @@ import { WalletModule } from './modules/wallet/wallet.module';
  * 已挂载：
  * - round 1：配置 + MySQL + 探活
  * - round 2：Redis + JWT 签发 + 认证（§1）+ 钱包（§3/§6）+ 内网计费（§4）
- * 待挂载：
- * - round 3：商品目录同步（§5.1）+ 订单与支付（§2）+ 开通与退款 + 日对账（§6）
+ * - round 3：商品目录同步（§5.1）+ 商城与订单（§2）+ 开通 worker（§5.2）+ 对账（§6）
  */
 @Module({
   imports: [
     // .env 由 main.ts 在引导前读入 process.env（Node 20+ 原生 loadEnvFile）
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+    // 定时任务：商品同步（10 分钟）、开通 worker（3 秒轮询）、日对账（每日 04:10）
+    ScheduleModule.forRoot(),
     ConfigurationModule,
     RedisModule,
     TokenModule,
@@ -62,6 +67,9 @@ import { WalletModule } from './modules/wallet/wallet.module';
     AuthModule,
     WalletModule,
     InternalModule,
+    ProductModule,
+    OrderModule,
+    ReconciliationModule,
   ],
   controllers: [AppController],
   providers: [
