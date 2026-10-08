@@ -1,0 +1,55 @@
+# 云平台统一门户 · 本地起库（第 1 轮自验用）
+#
+# 用途：在没有正式服务器前，本机一条命令起 MySQL 8 + Redis 7，跑迁移、做联调。
+#   docker compose up -d
+#   npm run migration:run
+#   curl http://127.0.0.1:3000/api/healthz
+#
+# 注意：
+# - 端口用 3306/6379 的标准映射；若与云存储的 PostgreSQL(5432) 等共存无冲突。
+# - 生产部署的 compose 由后续轮次单独给出（含 nginx + 门户静态前端）。
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: portal-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      # 契约的支付流程会串行占用连接，池子按 10 预留余量
+      - --max-connections=200
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-portal_root_pwd}
+      MYSQL_DATABASE: ${DB_DATABASE:-cloud_portal}
+      MYSQL_USER: ${DB_USERNAME:-portal}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-portal_pwd}
+      TZ: UTC
+    ports:
+      - '${DB_PORT:-3306}:3306'
+    volumes:
+      - portal-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-p${MYSQL_ROOT_PASSWORD:-portal_root_pwd}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: portal-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - portal-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  portal-mysql-data:
+  portal-redis-data:

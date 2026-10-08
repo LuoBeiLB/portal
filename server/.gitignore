@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+coverage/
+
+# 环境与密钥（禁止提交）
+.env
+.env.local
+.env.*.local
+keys/
+*.pem
+*.key
+
+# 日志与编辑器
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
