@@ -54,8 +54,12 @@ try {
     & node scripts/reset-products.cjs
 
     Write-Host '=== 4. 起产品桩 + 门户服务 ==='
-    # 模拟「只配了入站密钥、未配地址」的产品（云手机），验证入站鉴权与出站同步已解耦：
-    # phone 不参与商品同步，但它的密钥必须能通过门户的入站校验。
+    # 用 STUB_* 覆盖 .env：让门户指向**测试桩**而不是 .env 里配的真实云存储。
+    # process.loadEnvFile 不覆盖已存在的环境变量，所以这里的进程环境优先。
+    # 同时注入一个"仅入站"产品（云手机）的密钥，验证入站鉴权与出站同步已解耦。
+    $env:PRODUCT_STORAGE_BASE_URL = 'http://127.0.0.1:8081'
+    $env:PRODUCT_STORAGE_INTERNAL_KEY = 'stub-storage-key'
+    $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `

@@ -12,7 +12,9 @@
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
-const INTERNAL_KEY = process.env.PRODUCT_STORAGE_INTERNAL_KEY || 'stub-storage-key';
+// 走测试桩用的密钥：用 STUB_* 而不是 PRODUCT_STORAGE_INTERNAL_KEY
+// （后者现在是**真实云存储的密钥**，自验不该打到真实环境）
+const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key';
 
 let passed = 0;
 let failed = 0;

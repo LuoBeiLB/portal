@@ -5,8 +5,14 @@
  *   GET  /internal/products   商品目录
  *   POST /internal/provision  开通（幂等键 order_item_id）
  *
+ * ## 密钥来源（重要）
+ * 校验的 `X-Internal-Key` 优先取 `STUB_PRODUCT_INTERNAL_KEY`（默认 `stub-storage-key`），
+ * **不再**取门户的 `PRODUCT_STORAGE_INTERNAL_KEY` —— 那个值现在是**真实云存储的密钥**，
+ * 不该出现在测试桩里。e2e 脚本会同时给桩和门户注入 STUB 变量，两边自然对上。
+ *
  * 启动：
- *   PORT=8081 PRODUCT_INTERNAL_KEY=stub-storage-key node scripts/stub-product-server.cjs
+ *   node scripts/stub-product-server.cjs
+ *   PORT=9999 node scripts/stub-product-server.cjs
  * 可选故障注入（用于验证自动退款 / 重试路径）：
  *   PROVISION_MODE=fail      每次都返回 4004 库存不足（业务失败 → 立即退款）
  *   PROVISION_MODE=error     每次都返回 5001 内部错误（系统失败 → 重试到用尽再退款）
@@ -16,7 +22,8 @@
 const http = require('node:http');
 
 const PORT = Number(process.env.PORT || 8081);
-const INTERNAL_KEY = process.env.PRODUCT_INTERNAL_KEY || 'stub-storage-key';
+const INTERNAL_KEY =
+  process.env.STUB_PRODUCT_INTERNAL_KEY || process.env.PRODUCT_INTERNAL_KEY || 'stub-storage-key';
 const MODE = process.env.PROVISION_MODE || 'ok';
 
 /** 幂等存储：order_item_id -> 首次开通结果 */

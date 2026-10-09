@@ -3,15 +3,18 @@
  *
  * 前置：
  *   1) 起一个"产品桩"（模拟云存储的 /internal/products 与 /internal/provision）
- *      PORT=8081 PRODUCT_INTERNAL_KEY=stub-storage-key node scripts/stub-product-server.cjs
- *   2) 起门户服务（.env 里 PRODUCT_STORAGE_BASE_URL 指向桩、PRODUCT_STORAGE_INTERNAL_KEY 一致）
+ *      node scripts/stub-product-server.cjs
+ *   2) 起门户服务，并用 STUB_PRODUCT_* 覆盖 .env，让它指向桩而不是真实云存储
+ *      （run-e2e-round3.ps1 已自动完成 1~2 步）
  *   3) node scripts/e2e-round3.cjs
  *
  * 覆盖：契约 §2.1 / §2.2 / §2.3 / §2.4 / §5.1 / §5.2 / §6 对账
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
-const INTERNAL_KEY = process.env.PRODUCT_STORAGE_INTERNAL_KEY || 'stub-storage-key';
+// 走测试桩用的密钥：用 STUB_* 而不是 PRODUCT_STORAGE_INTERNAL_KEY
+// （后者现在是**真实云存储的密钥**，自验不该打到真实环境）
+const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key';
 
 let passed = 0;
 let failed = 0;

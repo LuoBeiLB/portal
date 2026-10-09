@@ -8,7 +8,9 @@
  *
  * 环境变量可覆盖：
  *   ADMIN_KEY      管理端 X-Admin-Key（默认取 .env 的 ADMIN_KEY）
- *   INTERNAL_KEY   内网 X-Internal-Key（默认取 .env 的 PRODUCT_STORAGE_INTERNAL_KEY）
+ *   INTERNAL_KEY   内网 X-Internal-Key（默认取 .env 的 STUB_PRODUCT_INTERNAL_KEY）
+ *                  ⚠️ 若你要验的是**真实云存储**，请显式传 PRODUCT_STORAGE_INTERNAL_KEY 的值：
+ *                     INTERNAL_KEY=<真实密钥> node scripts/verify-api.cjs <地址>
  *
  * 它做什么：按契约逐条调接口，并把「HTTP 状态码 / 业务 code / 关键字段类型」打印出来。
  * 目的不是断言全通过，而是让你一眼看出**哪个接口、哪一步、返回了什么**。
@@ -20,7 +22,7 @@ if (existsSync(resolve(process.cwd(), '.env'))) process.loadEnvFile(resolve(proc
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:3000').replace(/\/+$/, '');
 const ADMIN_KEY = process.argv[3] || process.env.ADMIN_KEY || '';
-const INTERNAL_KEY = process.env.PRODUCT_STORAGE_INTERNAL_KEY || '';
+const INTERNAL_KEY = process.env.INTERNAL_KEY || process.env.STUB_PRODUCT_INTERNAL_KEY || '';
 
 let pass = 0;
 let fail = 0;

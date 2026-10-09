@@ -177,6 +177,24 @@ node scripts/e2e-round2.cjs                    # 另开终端，91 项端到端
 
 **运维含义**：想临时停掉某产品的商品同步，把它的 `*_BASE_URL` 注释掉即可，**它的扣费/退款不受影响**。
 
+### 本地自验与真实云存储是分开的
+
+`.env` 里的 `PRODUCT_STORAGE_*` 指向**真实云存储**（联调时把地址填上）。
+本地跑三套 e2e 时，`run-e2e-*.ps1` 会用**进程环境覆盖** `PRODUCT_STORAGE_BASE_URL` 与
+`PRODUCT_STORAGE_INTERNAL_KEY` 指向测试桩（见脚本第 4 步）—— 因为
+`process.loadEnvFile` 不覆盖已存在的环境变量，**跑自验永远不会打到真实云存储**。
+
+桩自己的密钥在 `STUB_PRODUCT_INTERNAL_KEY`（默认 `stub-storage-key`），与真实密钥无关：
+
+| 变量 | 用途 | 谁用 |
+|---|---|---|
+| `PRODUCT_STORAGE_INTERNAL_KEY` | 真实云存储的密钥 | 门户（联调/生产） |
+| `STUB_PRODUCT_INTERNAL_KEY` | 测试桩的密钥 | `stub-product-server.cjs` + e2e 脚本 |
+
+⚠️ **改完 `.ps1` 记得跑 `node scripts/ensure-ps1-bom.cjs`**：PowerShell 5.1 读无 BOM 的 UTF-8
+会按 ANSI 解码，中文注释里的引号会打乱语法，报出一堆与真实原因无关的 ParserError。
+很多编辑器（含 AI 编辑工具）保存时会丢掉 BOM。
+
 ## 开通 worker（第 3 轮新增）
 
 `ProvisionWorker` 每 3 秒扫一次 `o_provision_job`，逐条调产品 `POST /internal/provision`：

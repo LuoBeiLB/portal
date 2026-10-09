@@ -47,7 +47,11 @@ try {
 
     Write-Host '=== 4. 起故障模式产品桩（PROVISION_MODE=fail）+ 门户服务 ==='
     $env:PROVISION_MODE = 'fail'
-    # 与 run-e2e-round3.ps1 保持一致：注入一个"仅入站"产品的密钥，保证断言集可复现
+    # 与 run-e2e-round3.ps1 保持一致：用 STUB_* 覆盖 .env，让门户指向测试桩而不是真实云存储；
+    # 并注入一个"仅入站"产品的密钥，保证断言集可复现。
+    $env:PRODUCT_STORAGE_BASE_URL = 'http://127.0.0.1:8081'
+    $env:PRODUCT_STORAGE_INTERNAL_KEY = 'stub-storage-key'
+    $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
