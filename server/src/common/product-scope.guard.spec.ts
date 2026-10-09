@@ -30,17 +30,13 @@ describe('ProductScopeGuard（body 自报的 product_code 必须与密钥归属�
   });
 
   it('空字符串视为未自报 → 放行', () => {
-    expect(
-      guard.canActivate(contextOf({ body: { product_code: '' }, [INTERNAL_PRODUCT_KEY]: asStorage })),
-    ).toBe(true);
+    expect(guard.canActivate(contextOf({ body: { product_code: '' }, [INTERNAL_PRODUCT_KEY]: asStorage }))).toBe(true);
   });
 
   it('自报与密钥归属一致 → 放行', () => {
-    expect(
-      guard.canActivate(
-        contextOf({ body: { product_code: 'storage' }, [INTERNAL_PRODUCT_KEY]: asStorage }),
-      ),
-    ).toBe(true);
+    expect(guard.canActivate(contextOf({ body: { product_code: 'storage' }, [INTERNAL_PRODUCT_KEY]: asStorage }))).toBe(
+      true,
+    );
   });
 
   it('**自报成别人的产品 → 1004**（本轮修复的核心场景）', () => {
@@ -56,9 +52,7 @@ describe('ProductScopeGuard（body 自报的 product_code 必须与密钥归属�
 
   it('自报成不存在的产品 → 1004', () => {
     try {
-      guard.canActivate(
-        contextOf({ body: { product_code: 'not-a-product' }, [INTERNAL_PRODUCT_KEY]: asStorage }),
-      );
+      guard.canActivate(contextOf({ body: { product_code: 'not-a-product' }, [INTERNAL_PRODUCT_KEY]: asStorage }));
       throw new Error('应当抛出');
     } catch (error) {
       expect((error as BizException).code).toBe(ErrorCode.FORBIDDEN);
@@ -74,8 +68,6 @@ describe('ProductScopeGuard（body 自报的 product_code 必须与密钥归属�
   });
 
   it('没挂 InternalKeyGuard（身份缺失）→ 直接报错，而不是静默放行', () => {
-    expect(() => guard.canActivate(contextOf({ body: { product_code: 'storage' } }))).toThrow(
-      /InternalKeyGuard/,
-    );
+    expect(() => guard.canActivate(contextOf({ body: { product_code: 'storage' } }))).toThrow(/InternalKeyGuard/);
   });
 });

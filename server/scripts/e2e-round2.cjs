@@ -211,6 +211,39 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('声明正确的 product_code 不受影响', correct.body.code === 3001 || correct.body.code === 0, correct.body);
   }
 
+  console.log(`\n=== 6.2 入站鉴权与出站同步解耦（仅配密钥的产品）===`);
+  {
+    // 由 run-e2e-round3.ps1 / 手工启动时注入：PRODUCT_PHONE_INTERNAL_KEY 非空、PRODUCT_PHONE_BASE_URL 为空
+    const inboundOnlyKey = process.env.PRODUCT_PHONE_INTERNAL_KEY || '';
+    if (!inboundOnlyKey) {
+      console.log('  （跳过：未设置 PRODUCT_PHONE_INTERNAL_KEY，无法模拟"仅入站"产品）');
+    } else {
+      // 该产品的密钥必须被认出来 —— 只是余额不足（3001），不是密钥无效（1002）
+      const recognized = await api('/api/wallet/deduct', {
+        method: 'POST',
+        headers: { 'x-internal-key': inboundOnlyKey },
+        body: { portal_user_id: userId, bill_no: `${billNo}-inbound`, amount_cents: 100 },
+      });
+      check(
+        '**仅配密钥（未配地址）的产品密钥仍能通过入站鉴权**（3001 余额不足，而非 1002 密钥无效）',
+        recognized.body.code === 3001,
+        recognized.body,
+      );
+
+      // 但它的身份是 phone，不能冒用 storage
+      const crossSpoof = await api('/api/wallet/deduct', {
+        method: 'POST',
+        headers: { 'x-internal-key': inboundOnlyKey },
+        body: { portal_user_id: userId, product_code: 'storage', bill_no: `${billNo}-inbound2`, amount_cents: 100 },
+      });
+      check(
+        '该密钥声明 storage -> 1004（身份仍是 phone，隔离性不受影响）',
+        crossSpoof.body.code === 1004,
+        crossSpoof.body,
+      );
+    }
+  }
+
   console.log(`\n=== 7. 充值申请 -> 管理端核销（§3.3 / §6）===`);
   let applyId = '';
   {

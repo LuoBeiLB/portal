@@ -47,6 +47,9 @@ try {
 
     Write-Host '=== 4. 起故障模式产品桩（PROVISION_MODE=fail）+ 门户服务 ==='
     $env:PROVISION_MODE = 'fail'
+    # 与 run-e2e-round3.ps1 保持一致：注入一个"仅入站"产品的密钥，保证断言集可复现
+    $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
+    $env:PRODUCT_PHONE_BASE_URL = ''
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-refund.txt" `
         -RedirectStandardError "$env:TEMP\stub-refund-err.txt" -PassThru -WindowStyle Hidden

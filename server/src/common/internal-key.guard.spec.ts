@@ -102,4 +102,33 @@ describe('InternalKeyGuard（密钥 → 产品身份绑定）', () => {
     expect(guard.canActivate(contextOf(request))).toBe(true);
     expect(request[INTERNAL_PRODUCT_KEY]?.code).toBe('storage');
   });
+
+  it('**身份绑定到具体产品**：storage 的密钥不会被认成 phone', () => {
+    const guard = guardOf(products);
+
+    const asStorage: FakeRequest = { headers: { 'x-internal-key': 'key-storage' } };
+    guard.canActivate(contextOf(asStorage));
+    expect(asStorage[INTERNAL_PRODUCT_KEY]?.code).toBe('storage');
+
+    const asPhone: FakeRequest = { headers: { 'x-internal-key': 'key-phone' } };
+    guard.canActivate(contextOf(asPhone));
+    expect(asPhone[INTERNAL_PRODUCT_KEY]?.code).toBe('phone');
+    // 两把密钥解析出的身份必须不同 —— 这是 ProductScopeGuard 能拦住跨产品冒用的前提
+    expect(asStorage[INTERNAL_PRODUCT_KEY]?.code).not.toBe(asPhone[INTERNAL_PRODUCT_KEY]?.code);
+  });
+
+  it('仅配密钥、未配地址的产品（enabled=false）仍可用于入站鉴权', () => {
+    const config = {
+      products: [
+        { code: 'storage', baseUrl: 'http://127.0.0.1:9000', internalKey: 'key-storage', enabled: true },
+        // 只配了密钥：地址为空 → enabled=false，但仍需能校验出身份
+        { code: 'phone', baseUrl: '', internalKey: 'key-phone-inbound-only', enabled: false },
+      ],
+    } as unknown as PortalConfigService;
+    const guard = new InternalKeyGuard(config);
+
+    const request: FakeRequest = { headers: { 'x-internal-key': 'key-phone-inbound-only' } };
+    expect(guard.canActivate(contextOf(request))).toBe(true);
+    expect(request[INTERNAL_PRODUCT_KEY]?.code).toBe('phone');
+  });
 });

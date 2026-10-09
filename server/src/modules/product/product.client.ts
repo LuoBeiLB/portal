@@ -74,9 +74,21 @@ export class ProductClient {
     return this.config.products;
   }
 
+  /**
+   * 按产品代码取端点。
+   *
+   * ⚠️ 只配了密钥、未配地址的产品（`enabled = false`）也会在列表里（它需要参与入站鉴权），
+   * 但**不能**用于出站调用 —— 这里显式拦住，避免拼出 `"http:///internal/products"` 这种空地址请求。
+   */
   findByCode(productCode: string): ProductEndpoint {
     const endpoint = this.config.products.find((item) => item.code === productCode);
     if (!endpoint) throw new BizException(ErrorCode.PRODUCT_NOT_FOUND, `未配置产品 ${productCode} 的内网地址`);
+    if (!endpoint.enabled || !endpoint.baseUrl) {
+      throw new BizException(
+        ErrorCode.PRODUCT_NOT_FOUND,
+        `产品 ${productCode} 未配置内网地址（仅配置了入站密钥），无法出站调用`,
+      );
+    }
     return endpoint;
   }
 

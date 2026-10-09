@@ -45,16 +45,52 @@ describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', (
     expect(config.wallet.retryBackoffMs).toEqual([1000, 5000, 30000]);
   });
 
-  it('规则：地址非空的产品才进列表；地址为空的被剔除（不参与同步、不刷连接错误）', () => {
+  it('地址非空的产品进列表且 enabled=true（参与同步与开通）', () => {
     const config = loadConfig();
     const testA = config.products.find((item) => item.code === 'testa');
     expect(testA?.enabled).toBe(true);
     expect(testA?.baseUrl).toBe('http://127.0.0.1:8111');
     expect(testA?.internalKey).toBe('k-a');
-    // 未配地址的产品不应出现
+  });
+
+  it('地址与密钥都没配的产品不进列表（既不参与同步，也做不了入站鉴权）', () => {
+    const config = loadConfig();
     expect(config.products.some((item) => item.code === 'testb')).toBe(false);
-    // 列表里的每一项都必须可用
-    expect(config.products.every((item) => item.enabled && item.baseUrl.length > 0)).toBe(true);
+  });
+
+  it('**只配了密钥、地址为空的产品也进列表**，但标记为仅入站（enabled=false）', () => {
+    process.env.PRODUCT_TESTB_INTERNAL_KEY = 'k-b-inbound-only';
+    delete process.env.PRODUCT_TESTB_BASE_URL;
+
+    const config = loadConfig();
+    const testB = config.products.find((item) => item.code === 'testb');
+
+    // 存在的意义：产品调门户扣费/退款时的 X-Internal-Key 要靠它校验
+    expect(testB).toBeDefined();
+    expect(testB?.internalKey).toBe('k-b-inbound-only');
+    // 但不得参与出站：enabled=false 会被 forSync() 过滤，findByCode() 也会拦
+    expect(testB?.enabled).toBe(false);
+    expect(testB?.baseUrl).toBe('');
+
+    delete process.env.PRODUCT_TESTB_INTERNAL_KEY;
+  });
+
+  it('入站密钥的加载与出站地址解耦：清空地址不会让已配的密钥失效', () => {
+    process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a-decoupled';
+    process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
+    const withAddress = loadConfig();
+    expect(withAddress.products.find((item) => item.code === 'testa')?.internalKey).toBe('k-a-decoupled');
+
+    // 模拟"暂停该产品的商品同步"——只清地址，保留密钥
+    delete process.env.PRODUCT_TESTA_BASE_URL;
+    const withoutAddress = loadConfig();
+    const testA = withoutAddress.products.find((item) => item.code === 'testa');
+
+    expect(testA?.internalKey).toBe('k-a-decoupled'); // ← 密钥仍在，入站鉴权不受影响
+    expect(testA?.enabled).toBe(false); // ← 但不再参与同步
+
+    process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
+    process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a';
   });
 
   it('环境变量覆盖生效，且 baseUrl 末尾斜杠被规范化', () => {

@@ -13,7 +13,7 @@
 ### 第 1 轮 · 地基 ✅
 工程骨架 · 配置装载 · 9 张表实体 · 建表迁移 · 统一响应与异常过滤 · 探活 `/api/healthz`、`/api/meta` · 本地 compose。
 
-### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 64 项全通过）
+### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 91 项全通过）
 
 | 契约章节 | 接口 | 状态 |
 |---|---|---|
@@ -93,7 +93,7 @@ npm run migration:run
 # 6) 启动并自验
 npm run start:dev
 curl http://127.0.0.1:3000/api/healthz        # {"code":0,...,"data":{"status":"ok",...}}
-node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
+node scripts/e2e-round2.cjs                    # 另开终端，91 项端到端
 ```
 
 ## 常用脚本
@@ -104,7 +104,7 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
 | `npm test` | 单元测试（37 项，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**89 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / OpenAPI 文档） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**91 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / OpenAPI 文档） |
 | `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（53 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
 | `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（19 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
@@ -157,6 +157,25 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 2. **账单号必须带产品前缀**。`w_transaction.bill_no` 是**全局唯一**（`uk_txn_bill_no`），不是按产品唯一 ——
    两个产品发出同样的 `bill_no` 时，后到的会被当成幂等重复（`3003`）而**扣不到钱**。
    例：云存储的 `storage-20261009-000002` 安全；裸的 `20261009-000002` 早晚撞。
+
+### 入站鉴权与出站同步**解耦**（别把它们当成一个开关）
+
+产品列表里可能有两种条目：
+
+| 条目 | `enabled` | 参与商品同步 | 参与开通 | 参与**入站鉴权** |
+|---|---|---|---|---|
+| 配了地址（+ 密钥） | `true` | ✅ | ✅ | ✅ |
+| **只配了密钥**（地址为空） | `false` | ❌ | ❌ | ✅ |
+
+**为什么要有第二种**：入站鉴权（产品调门户扣费/退款/报账单）和出站同步（门户拉商品/发起开通）
+是**两件独立的事**。早先只按 `enabled` 过滤产品，导致「清空某产品地址以暂停同步」会
+**连带把它的扣费请求也拒掉**（密钥不再被加载 → 对方收到 `1002`），排查时极难联想到是同步开关引起的。
+
+所以现在：`.filter((item) => item.enabled || item.internalKey.length > 0)`。
+只配密钥的产品在同步侧被 `ProductSyncService.forSync()` 过滤掉，开通侧被 `ProductClient.findByCode()` 拦住，
+不会误发空地址请求。
+
+**运维含义**：想临时停掉某产品的商品同步，把它的 `*_BASE_URL` 注释掉即可，**它的扣费/退款不受影响**。
 
 ## 开通 worker（第 3 轮新增）
 
