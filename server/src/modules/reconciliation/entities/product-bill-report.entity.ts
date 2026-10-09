@@ -7,7 +7,7 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 
  * （契约明确产品库结构自定）。所以产品侧必须把当日账单导出给门户，门户再做比对。
  *
  * 一期由产品侧调 `POST /api/internal/reconciliation/report` 上报；
- * 若产品侧不方便推送，也可以用 `-- 从产品库导出 CSV` 的方式喂给对账脚本，两条路都留。
+ * 若产品侧不方便推送，也可以从产品库导出 CSV 后人工喂给对账，两条路都留。
  */
 @Entity('r_product_bill_report')
 @Index('uk_report_date_product_bill', ['bizDate', 'productCode', 'billNo'], { unique: true })
@@ -25,7 +25,13 @@ export class ProductBillReportEntity {
   @Column({ name: 'bill_no', type: 'varchar', length: 64, comment: '产品侧账单号' })
   billNo!: string;
 
-  @Column({ name: 'portal_user_id', type: 'char', length: 36, nullable: true, comment: '门户用户 UUID（产品侧影子表里的）' })
+  @Column({
+    name: 'portal_user_id',
+    type: 'char',
+    length: 36,
+    nullable: true,
+    comment: '门户用户 UUID（产品侧影子表里的）',
+  })
   portalUserId!: string | null;
 
   @Column({ name: 'amount_cents', type: 'bigint', comment: '账单金额，单位：分' })

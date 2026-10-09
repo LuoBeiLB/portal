@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { RedisModule } from './common/redis.module';
 import { RedisStore } from './common/redis-store.service';
 import { ConfigurationModule } from './config/configuration.module';
+import { buildMysqlOptions } from './config/database.options';
 import { PortalConfigService } from './config/portal-config.service';
 import { TokenModule } from './config/token.module';
 import { PORTAL_ENTITIES } from './database/entities';
@@ -41,16 +42,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
     TypeOrmModule.forRootAsync({
       inject: [PortalConfigService],
       useFactory: (config: PortalConfigService) => ({
-        type: 'mysql' as const,
-        host: config.database.host,
-        port: config.database.port,
-        username: config.database.username,
-        password: config.database.password,
-        database: config.database.database,
-        charset: config.database.charset,
-        timezone: 'Z',
-        supportBigNumbers: true,
-        bigNumberStrings: true,
+        // 连接参数（含会话时区）与迁移 CLI 共用同一份构造，避免两边行为不一致
+        ...buildMysqlOptions(config.database, config.database.poolSize),
         // 严禁 synchronize：表结构一律走 migration:run（用户 2026-10-08 澄清的迁移纪律）
         synchronize: false,
         // 启动即验连接：失败快速退出并打印原因，避免运维在"起了但连不上库"的状态里排障
@@ -58,10 +51,6 @@ import { WalletModule } from './modules/wallet/wallet.module';
         retryDelay: 2000,
         logging: config.database.logging,
         entities: PORTAL_ENTITIES,
-        extra: {
-          connectionLimit: config.database.poolSize,
-          charset: config.database.charset,
-        },
       }),
     }),
     AuthModule,

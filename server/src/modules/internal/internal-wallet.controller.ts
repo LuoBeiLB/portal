@@ -1,5 +1,5 @@
-import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -36,6 +36,8 @@ export class InternalWalletController {
       '错误：3001 余额不足（`data.balance` 带当前余额，**不重试**）、3002 钱包冻结（不重试）、1001 参数错误。\n\n' +
       '产品实现要点：账单先落库 → 调本接口 → code=0 改 status=1；网络超时/5xx 用**同一 bill_no** 退避重试（1s/5s/30s）。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('deduct')
   async deduct(@Body() dto: DeductDto): Promise<unknown> {
     await this.assertUserExists(dto.portal_user_id);
@@ -55,9 +57,7 @@ export class InternalWalletController {
     };
 
     // 幂等重复：契约明确「code=3003 且 data 为首次结果」，产品侧应视为成功
-    return result.idempotentRepeated
-      ? withBizCode(ErrorCode.IDEMPOTENT_REPEATED, data, 'duplicate bill_no')
-      : data;
+    return result.idempotentRepeated ? withBizCode(ErrorCode.IDEMPOTENT_REPEATED, data, 'duplicate bill_no') : data;
   }
 
   /** §4.2 退款。refund_bill_no 是幂等键；累计退款不得超过原单金额（3004） */
@@ -67,6 +67,8 @@ export class InternalWalletController {
       '产品 → 门户。幂等键 refund_bill_no。退款退回**原扣费账单所属的钱包**，调用方无需传 userId。\n\n' +
       '错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('refund')
   async refund(@Body() dto: RefundDto): Promise<unknown> {
     const result = await this.ledger.refund({

@@ -36,10 +36,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, PortalResponse
   constructor(private readonly reflector: Reflector) {}
 
   intercept(context: ExecutionContext, next: CallHandler<T>): Observable<PortalResponse<T | null> | T> {
-    const raw = this.reflector.getAllAndOverride<boolean>(RAW_RESPONSE_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const raw = this.reflector.getAllAndOverride<boolean>(RAW_RESPONSE_KEY, [context.getHandler(), context.getClass()]);
     if (raw) return next.handle();
 
     return next.handle().pipe(

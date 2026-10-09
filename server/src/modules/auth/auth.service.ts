@@ -51,14 +51,20 @@ export class AuthService {
 
     try {
       await this.dataSource.transaction(async (manager) => {
+        // 显式写入时间戳：DATETIME 列不依赖库侧 CURRENT_TIMESTAMP（它按会话时区生成，
+        // 会造成 8 小时偏移，详见 common/utc-date.transformer.ts）。
+        // 用 insert() 时 @BeforeInsert 钩子不会触发，所以这里必须显式给值。
+        const now = new Date();
         await manager.insert(UserEntity, {
           id,
           username: dto.username,
           phone: dto.phone ?? null,
           passwordHash,
           status: UserStatus.NORMAL,
+          createdAt: now,
+          updatedAt: now,
         });
-        await manager.insert(WalletEntity, { userId: id, balanceCents: '0' });
+        await manager.insert(WalletEntity, { userId: id, balanceCents: '0', updatedAt: now });
       });
     } catch (error) {
       // 并发注册时唯一索引兜底：把 DB 冲突翻译成契约错误码

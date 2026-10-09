@@ -1,18 +1,13 @@
 import 'reflect-metadata';
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { DataSource } from 'typeorm';
 
 import { loadConfig } from '../config/configuration';
+import { buildMysqlOptions, loadEnvFileIfPresent } from '../config/database.options';
 import { PORTAL_ENTITIES } from './entities';
 
 // CLI 执行迁移时同样需要 .env
-const envFile = resolve(process.cwd(), '.env');
-if (existsSync(envFile)) {
-  process.loadEnvFile(envFile);
-}
+loadEnvFileIfPresent();
 
 /**
  * TypeORM CLI / 迁移专用 DataSource。
@@ -28,17 +23,7 @@ if (existsSync(envFile)) {
 const config = loadConfig();
 
 export const AppDataSource = new DataSource({
-  type: 'mysql',
-  host: config.database.host,
-  port: config.database.port,
-  username: config.database.username,
-  password: config.database.password,
-  database: config.database.database,
-  charset: config.database.charset,
-  // 时区统一按 UTC 存取，展示层再转本地（契约 §0.4）
-  timezone: 'Z',
-  supportBigNumbers: true,
-  bigNumberStrings: true,
+  ...buildMysqlOptions(config.database, config.database.poolSize),
   synchronize: false,
   logging: config.database.logging,
   entities: PORTAL_ENTITIES,

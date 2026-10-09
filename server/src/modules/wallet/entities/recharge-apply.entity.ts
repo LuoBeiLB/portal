@@ -30,7 +30,12 @@ export class RechargeApplyEntity {
   @Column({ name: 'remark', type: 'varchar', length: 255, nullable: true, comment: '转账备注/凭证说明' })
   remark!: string | null;
 
-  @Column({ name: 'status', type: 'smallint', default: RechargeStatus.PENDING, comment: '0 待核销 1 已到账 2 驳回' })
+  @Column({
+    name: 'status',
+    type: 'smallint',
+    default: RechargeStatus.PENDING,
+    comment: '0 待核销 1 已到账 2 驳回',
+  })
   status!: RechargeStatus;
 
   @Column({ name: 'reviewed_by', type: 'char', length: 36, nullable: true, comment: '核销管理员 user_id' })

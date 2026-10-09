@@ -248,8 +248,11 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
 
   console.log(`\n=== 7. 产品账单上报 + 日对账（§6）===`);
   {
-    // 用一个"干净的业务日"（明天）做对账，避免历史上其它测试跑留下的流水干扰（同库同一天会互相污染）
-    const bizDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // 每次运行用一个**唯一的未来日期**做对账：同库同一天的历史流水/上报会互相污染，
+    // 而"明天"这个固定日期重复跑也会累积上一次的上报数据，导致断言不稳定。
+    const bizDate = new Date(Date.now() + (3000 + Math.floor(Math.random() * 60000)) * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
     const txn = (await api('/api/wallet/transactions?type=2', { token })).body?.data?.list ?? [];
     const billNo = txn[0]?.bill_no;

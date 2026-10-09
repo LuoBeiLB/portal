@@ -68,12 +68,18 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('GET /api/healthz 无需 token 即可访问（code=0）', res.body.code === 0, res.body);
     check('data.status = ok（DB 与 Redis 都通）', res.body?.data?.status === 'ok', res.body?.data);
     check('响应体含 code/message/data 三字段', ['code', 'message', 'data'].every((k) => k in res.body), Object.keys(res.body));
+    check('GET 接口 HTTP 200', res.status === 200, res.status);
+
+    // 契约 §0.2：所有接口（含 POST）HTTP 状态码均为 200 —— Nest 对 POST 默认 201，必须显式改掉
+    const postOk = await api('/api/auth/login', { method: 'POST', body: { username: 'nobody', password: 'x' } });
+    check('POST 接口业务失败时 HTTP 200（不是 201/4xx）', postOk.status === 200, postOk.status);
   }
 
   console.log(`\n=== 1. 注册（§1.1 注册即建钱包 + 自动登录）===`);
   {
     const res = await api('/api/auth/register', { method: 'POST', body: { username, password, phone } });
     check('注册成功 code=0', res.body.code === 0, res.body);
+    check('**成功的 POST 也返回 HTTP 200**（契约 §0.2，Nest 默认是 201）', res.status === 200, res.status);
     check('返回 id（UUID 36 位）', typeof res.body?.data?.id === 'string' && res.body.data.id.length === 36, res.body?.data?.id);
     check('返回 access_token', typeof res.body?.data?.access_token === 'string', null);
     check('expires_in=7200（契约 §1.2）', res.body?.data?.expires_in === 7200, res.body?.data?.expires_in);
@@ -336,6 +342,41 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('含 §3 钱包接口', paths.includes('/api/wallet/balance') && paths.includes('/api/wallet/transactions'), paths.filter((p) => p.includes('wallet')));
     check('含 §4 内网接口', paths.includes('/api/wallet/deduct') && paths.includes('/api/wallet/refund'), null);
     check('含 §6 管理端接口', paths.some((p) => p.startsWith('/api/admin/')), paths.filter((p) => p.startsWith('/api/admin')));
+    // 第 3 轮新增的接口也必须在文档里（否则前端联调时找不到）
+    check(
+      '含 §2 商城全部接口（商品 / 下单 / 订单列表 / 详情 / 支付）',
+      ['/api/shop/products', '/api/shop/orders', '/api/shop/orders/{id}', '/api/shop/orders/{id}/pay'].every((p) =>
+        paths.includes(p),
+      ),
+      paths.filter((p) => p.startsWith('/api/shop')),
+    );
+    check(
+      '含第 3 轮对账相关接口（日对账 / 补跑 / 任务排障 / 账单上报）',
+      [
+        '/api/admin/reconciliation/daily',
+        '/api/admin/reconciliation/run',
+        '/api/admin/reconciliation/provision-jobs',
+        '/api/internal/reconciliation/report',
+      ].every((p) => paths.includes(p)),
+      paths.filter((p) => p.includes('reconciliation')),
+    );
+    check(
+      '商城接口标注了 bearer 鉴权，内网接口标注 internal-key',
+      Boolean(doc.body?.paths?.['/api/shop/orders']?.post?.security?.some((s) => s.bearer)) &&
+        Boolean(doc.body?.paths?.['/api/internal/reconciliation/report']?.post?.security?.some((s) => s['internal-key'])),
+      doc.body?.paths?.['/api/shop/orders']?.post?.security,
+    );
+    check(
+      '第 3 轮 DTO 已生成 schema 且字段有描述',
+      Boolean(doc.body?.components?.schemas?.CreateOrderDto?.properties?.items) &&
+        Boolean(doc.body?.components?.schemas?.ReportBillsDto?.properties?.bills),
+      Object.keys(doc.body?.components?.schemas ?? {}),
+    );
+    check(
+      '下单入参不含价格字段（防止前端传价被信任）',
+      !Object.keys(doc.body?.components?.schemas?.OrderItemInputDto?.properties ?? {}).some((k) => k.includes('price')),
+      Object.keys(doc.body?.components?.schemas?.OrderItemInputDto?.properties ?? {}),
+    );
     check('声明了 Bearer 与 X-Internal-Key / X-Admin-Key 鉴权方案', Boolean(doc.body?.components?.securitySchemes?.bearer), Object.keys(doc.body?.components?.securitySchemes ?? {}));
     check('DTO 字段有 schema 描述（不是空对象）', Boolean(doc.body?.components?.schemas?.RegisterDto?.properties?.username), Object.keys(doc.body?.components?.schemas ?? {}).slice(0, 8));
   }

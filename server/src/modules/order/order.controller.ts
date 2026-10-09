@@ -1,5 +1,5 @@
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 
 import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
 import { ProductSyncService } from '../product/product-sync.service';
@@ -40,6 +40,8 @@ export class ShopController {
       '错误：4003 商品不存在或已下架（让用户刷新列表）、4004 库存不足。\n\n' +
       '创建时会校验库存，**支付时会再校验一次**。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('orders')
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto): Promise<Record<string, unknown>> {
     return { ...(await this.orders.create(user.id, dto)) };
@@ -48,7 +50,8 @@ export class ShopController {
   /** 我的订单列表（契约外补充，前端"我的订单"页需要） */
   @ApiOperation({
     summary: '我的订单列表（契约外补充）',
-    description: '按创建时间倒序分页，返回结构与订单详情一致（含 items）。契约原文只有"订单详情"，此接口是为前端补齐的。',
+    description:
+      '按创建时间倒序分页，返回结构与订单详情一致（含 items）。契约原文只有"订单详情"，此接口是为前端补齐的。',
   })
   @Get('orders')
   async listMine(@CurrentUser() user: AuthUser, @Query() query: OrderListQueryDto): Promise<Record<string, unknown>> {
@@ -78,6 +81,8 @@ export class ShopController {
       '已受理的项状态是 `1 已支付`，开通完成后会变成 `2 开通成功` 或 `4 已退款`（失败自动退款）。\n\n' +
       '错误：3001 余额不足（**未处理的项保持 0，充值后可再次点支付**）、4001 订单不存在、4002 订单状态不允许（已全部失败的订单不可再支付）。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('orders/:id/pay')
   async pay(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<Record<string, unknown>> {
     return { ...(await this.orders.pay(user.id, id)) };

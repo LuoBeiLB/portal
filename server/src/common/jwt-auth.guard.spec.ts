@@ -23,11 +23,7 @@ function contextOf(request: FakeRequest, isPublic = false): { ctx: ExecutionCont
   return { ctx, reflector };
 }
 
-function guardOf(
-  reflector: Reflector,
-  verify: (token: string) => Promise<unknown>,
-  revoked = false,
-): JwtAuthGuard {
+function guardOf(reflector: Reflector, verify: (token: string) => Promise<unknown>, revoked = false): JwtAuthGuard {
   const jwt = { verifyAsync: verify } as unknown as JwtService;
   const config = { jwt: { issuer: 'cloud-portal' } } as unknown as PortalConfigService;
   const tokens = { isAccessTokenRevoked: () => Promise.resolve(revoked) } as unknown as TokenService;

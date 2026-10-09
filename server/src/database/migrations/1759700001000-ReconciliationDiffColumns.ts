@@ -8,9 +8,9 @@ export class ReconciliationDiffColumns1759700001000 implements MigrationInterfac
   name = 'ReconciliationDiffColumns1759700001000';
 
   private readonly columns: Array<{ name: string; ddl: string }> = [
-    { name: 'product_only_count', ddl: 'INT NOT NULL DEFAULT 0 COMMENT \'仅产品侧有（门户漏记/未回传）\'' },
-    { name: 'portal_only_count', ddl: 'INT NOT NULL DEFAULT 0 COMMENT \'仅门户侧有（产品未上报）\'' },
-    { name: 'amount_mismatch_count', ddl: 'INT NOT NULL DEFAULT 0 COMMENT \'两边都有但金额不一致\'' },
+    { name: 'product_only_count', ddl: "INT NOT NULL DEFAULT 0 COMMENT '仅产品侧有（门户漏记/未回传）'" },
+    { name: 'portal_only_count', ddl: "INT NOT NULL DEFAULT 0 COMMENT '仅门户侧有（产品未上报）'" },
+    { name: 'amount_mismatch_count', ddl: "INT NOT NULL DEFAULT 0 COMMENT '两边都有但金额不一致'" },
     { name: 'status', ddl: "VARCHAR(16) NOT NULL DEFAULT 'ok' COMMENT 'ok 平账 / diff 有差异'" },
   ];
 

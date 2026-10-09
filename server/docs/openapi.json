@@ -18,8 +18,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -44,8 +44,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -60,8 +60,8 @@
         "description": "**不接收参数**，只依赖浏览器自动携带的 `refresh_token` Cookie（Path 限定为 `/api/auth/refresh`，所以前端无法手动读取它）。\n\nrefresh 不轮换、单设备语义（一期从简）。错误 1002 = refresh 无效或过期，需重新登录。",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -76,8 +76,8 @@
         "description": "吊销该用户全部 refresh 会话并清除 Cookie；access token 按契约不做黑名单（2h 自然过期），但本实现额外把当前 access token 也标记为已吊销（收紧到\"登出即失效\"）。\n\n返回 `{ ok: true }`。需要携带 Bearer token。",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -268,8 +268,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -388,8 +388,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -507,8 +507,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -538,8 +538,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -606,8 +606,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -708,8 +708,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -758,11 +758,21 @@
       "post": {
         "operationId": "AdminReconciliationController_run",
         "summary": "手动触发对账（补跑/排障）",
-        "description": "对指定日期与产品重新比对并覆盖结果。**差异不会自动修复**，只落库供人工处理。",
+        "description": "对指定日期与产品重新比对并覆盖结果。**差异不会自动修复**，只落库供人工处理。\n\n正常情况每天 04:10（UTC）自动对前一日；这个接口用于漏跑补数或排查差异。",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunReconciliationDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -813,8 +823,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
           }
         },
         "tags": [
@@ -1116,6 +1126,25 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "RunReconciliationDto": {
+        "type": "object",
+        "properties": {
+          "biz_date": {
+            "type": "string",
+            "description": "业务日（UTC），格式 YYYY-MM-DD",
+            "example": "2026-10-08"
+          },
+          "product_code": {
+            "type": "string",
+            "description": "产品代码",
+            "example": "storage"
+          }
+        },
+        "required": [
+          "biz_date",
+          "product_code"
         ]
       },
       "ReportBillItemDto": {

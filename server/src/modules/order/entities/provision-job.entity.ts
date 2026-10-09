@@ -32,7 +32,12 @@ export class ProvisionJobEntity {
   @Column({ name: 'order_id', type: 'bigint', unsigned: true })
   orderId!: string;
 
-  @Column({ name: 'order_item_id', type: 'bigint', unsigned: true, comment: '= o_order_item.id，产品 provision 的幂等键' })
+  @Column({
+    name: 'order_item_id',
+    type: 'bigint',
+    unsigned: true,
+    comment: '= o_order_item.id，产品 provision 的幂等键',
+  })
   orderItemId!: string;
 
   @Column({ name: 'user_id', type: 'char', length: 36 })
@@ -41,7 +46,12 @@ export class ProvisionJobEntity {
   @Column({ name: 'product_code', type: 'varchar', length: 32 })
   productCode!: string;
 
-  @Column({ name: 'status', type: 'smallint', default: ProvisionJobStatus.PENDING, comment: '0 待处理 1 处理中 2 成功 3 失败' })
+  @Column({
+    name: 'status',
+    type: 'smallint',
+    default: ProvisionJobStatus.PENDING,
+    comment: '0 待处理 1 处理中 2 成功 3 失败',
+  })
   status!: ProvisionJobStatus;
 
   @Column({ name: 'attempts', type: 'int', default: 0, comment: '已尝试次数' })
@@ -53,7 +63,13 @@ export class ProvisionJobEntity {
   @Column({ name: 'next_run_at', type: 'datetime', precision: 3, comment: '下次可执行时间（退避用）' })
   nextRunAt!: Date;
 
-  @Column({ name: 'claimed_at', type: 'datetime', precision: 3, nullable: true, comment: '认领时间，用于判定卡死' })
+  @Column({
+    name: 'claimed_at',
+    type: 'datetime',
+    precision: 3,
+    nullable: true,
+    comment: '认领时间，用于判定卡死',
+  })
   claimedAt!: Date | null;
 
   @Column({ name: 'last_error', type: 'varchar', length: 512, nullable: true })

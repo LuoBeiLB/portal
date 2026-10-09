@@ -50,13 +50,31 @@ export class OrderItemEntity {
   })
   status!: OrderItemStatus;
 
-  @Column({ name: 'instance_id', type: 'varchar', length: 64, nullable: true, comment: '产品 provision 返回的实例 id' })
+  @Column({
+    name: 'instance_id',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: '产品 provision 返回的实例 id',
+  })
   instanceId!: string | null;
 
-  @Column({ name: 'expire_at', type: 'datetime', precision: 3, nullable: true, comment: '产品 provision 返回的到期时间' })
+  @Column({
+    name: 'expire_at',
+    type: 'datetime',
+    precision: 3,
+    nullable: true,
+    comment: '产品 provision 返回的到期时间',
+  })
   expireAt!: Date | null;
 
-  @Column({ name: 'fail_reason', type: 'varchar', length: 64, nullable: true, comment: '如 OUT_OF_STOCK / INSUFFICIENT_BALANCE' })
+  @Column({
+    name: 'fail_reason',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: '如 OUT_OF_STOCK / INSUFFICIENT_BALANCE',
+  })
   failReason!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })

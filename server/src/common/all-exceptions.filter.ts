@@ -72,7 +72,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    this.logger.error(exception instanceof Error ? exception.stack ?? exception.message : String(exception));
+    this.logger.error(exception instanceof Error ? (exception.stack ?? exception.message) : String(exception));
     response.status(200).json({
       code: ErrorCode.INTERNAL_ERROR,
       message: ERROR_MESSAGES[ErrorCode.INTERNAL_ERROR],

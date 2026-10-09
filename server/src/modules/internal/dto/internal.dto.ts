@@ -16,7 +16,10 @@ export class DeductDto {
   @MaxLength(32)
   product_code!: string;
 
-  @ApiProperty({ description: '本产品账单号，≤64 位、产品内全局唯一；**先落库再调用**', example: 'storage-20261005-000123' })
+  @ApiProperty({
+    description: '本产品账单号，≤64 位、产品内全局唯一；**先落库再调用**',
+    example: 'storage-20261005-000123',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(64)

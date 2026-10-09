@@ -74,7 +74,10 @@ export class ReconciliationService {
           type: bill.type ?? 2,
           relatedBillNo: bill.related_bill_no ?? null,
         })
-        .orUpdate(['amount_cents', 'type', 'portal_user_id', 'related_bill_no'], ['biz_date', 'product_code', 'bill_no'])
+        .orUpdate(
+          ['amount_cents', 'type', 'portal_user_id', 'related_bill_no'],
+          ['biz_date', 'product_code', 'bill_no'],
+        )
         .execute();
       if (result.identifiers.length > 0 || Number(result.raw?.affectedRows ?? 0) >= 0) accepted += 1;
     }

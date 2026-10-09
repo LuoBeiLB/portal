@@ -25,10 +25,15 @@ export class OrderEntity {
   @Column({ name: 'user_id', type: 'char', length: 36 })
   userId!: string;
 
-  @Column({ name: 'total_cents', type: 'bigint', comment: '订单总额，单位：分' })
+  @Column({ name: 'total_cents', type: 'bigint', comment: '订单总额，单位：分（后端重算）' })
   totalCents!: string;
 
-  @Column({ name: 'status', type: 'smallint', default: OrderStatus.PENDING, comment: '0 待支付 1 部分成功 2 全部成功 3 全部失败' })
+  @Column({
+    name: 'status',
+    type: 'smallint',
+    default: OrderStatus.PENDING,
+    comment: '0 待支付 1 部分成功 2 全部成功 3 全部失败',
+  })
   status!: OrderStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })

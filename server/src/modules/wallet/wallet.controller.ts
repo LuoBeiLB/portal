@@ -1,5 +1,5 @@
-import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 
 import { AdminGuard } from '../../common/admin.guard';
@@ -19,7 +19,8 @@ export class WalletController {
   /** §3.1 余额 */
   @ApiOperation({
     summary: '查询余额（契约 §3.1）',
-    description: '返回 `{ balance_cents, status }`。`balance_cents` 单位**分**；`status`：0 正常 / 1 冻结（冻结时不能支付）。',
+    description:
+      '返回 `{ balance_cents, status }`。`balance_cents` 单位**分**；`status`：0 正常 / 1 冻结（冻结时不能支付）。',
   })
   @Get('balance')
   async balance(@CurrentUser() user: AuthUser): Promise<Record<string, unknown>> {
@@ -48,11 +49,10 @@ export class WalletController {
       '一期唯一入金通道：**提交申请 → 用户线下转账 → 管理员核销 → 余额到账**，不是即时到账。\n\n' +
       '金额 100 ~ 10,000,000 分。返回 `{ apply_id, status, notice }`，status：0 待核销 / 1 已到账 / 2 驳回。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('recharge/apply')
-  async applyRecharge(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: RechargeApplyDto,
-  ): Promise<Record<string, unknown>> {
+  async applyRecharge(@CurrentUser() user: AuthUser, @Body() dto: RechargeApplyDto): Promise<Record<string, unknown>> {
     return this.wallet.applyRecharge(user.id, dto);
   }
 }
@@ -72,7 +72,8 @@ export class AdminController {
   /** §6 充值核销队列 `GET /admin/recharges?status=0` */
   @ApiOperation({
     summary: '充值核销队列（契约 §6）',
-    description: '`?status=0` 只看待核销（0 待核销 / 1 已到账 / 2 驳回，缺省返回全部）。列表带 `username` / `phone` 便于核对。',
+    description:
+      '`?status=0` 只看待核销（0 待核销 / 1 已到账 / 2 驳回，缺省返回全部）。列表带 `username` / `phone` 便于核对。',
   })
   @Get('recharges')
   async listRecharges(@Query() query: RechargeQueryDto): Promise<Record<string, unknown>> {
@@ -87,6 +88,8 @@ export class AdminController {
       '到账会加余额并写 type=1 流水；入金失败会自动退回待核销，不会留"已到账但没加钱"的悬空单。\n\n' +
       '`admin_id` 为审核人标识（一期由调用方传入）。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('recharges/:id/confirm')
   async confirm(
     @Param('id') id: string,
@@ -128,7 +131,10 @@ export class AdminController {
       ].join(','),
     );
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    response.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
     response.send(`\uFEFF${[header, ...lines].join('\n')}`);
   }
 }

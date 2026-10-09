@@ -104,7 +104,7 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
 | `npm test` | 单元测试（37 项，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（73 项：认证 / 钱包 / 核销 / 内网计费 / OpenAPI） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**81 项**：认证 / 钱包 / 核销 / 内网计费 / OpenAPI 文档） |
 | `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（53 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
 | `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（19 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
@@ -118,7 +118,8 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 ## 关键约定（改动前务必读）
 
 1. **金额一律整数「分」**，字段名统一 `*_cents`；时间统一存 UTC（`DATETIME(3)`），展示层再转本地。
-2. **响应恒为** `{ code, message, data }`，HTTP 状态码 200（404/405 除外）。业务码见 `src/common/error-code.ts`，**禁止散落魔法数字**。
+2. **响应恒为** `{ code, message, data }`，HTTP 状态码一律 **200**（404/405 除外）。业务码见 `src/common/error-code.ts`，**禁止散落魔法数字**。
+   - ⚠️ **Nest 对 POST 默认返回 201**，与契约冲突。所有 POST handler 必须标 `@HttpCode(200)` + `@ApiOkResponse()`（后者让 Swagger 也如实标注 200）。端到端里有断言盯着这条。
 3. **两个接口例外、不套壳**，必须标 `@RawResponse()`：§1.5 JWKS（产品侧按标准 JWKS 解析）、§6 CSV 导出。
 4. **幂等**：`bill_no`（`w_transaction` 唯一索引）、`order_item_id`（订单项主键 = 产品 provision 幂等键）。先落库生成单号，再发请求。
 5. **钱包扣费只走条件原子更新**：
@@ -162,6 +163,10 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 > ⚠️ **`process.loadEnvFile` 的空值语义**：它把「`KEY=`」视为**未设置**，不会用空串覆盖已有环境变量。所以想把某产品设为"未接入"，要**删掉那一行或注释掉**，而不是留空值（留空值在部分环境下会被误认为设过）。
 
 > ⚠️ **自验脚本必须清端口**：反复手工起服务最容易踩 `EADDRINUSE` —— 表现是「测试打到了上一次的旧进程」，错误信息却完全不指向端口。`run-e2e-*.ps1` 已经做了清理，手工起服务时记得先杀干净。
+
+> ⚠️ **POST 默认 201（已修）**：契约 §0.2 要求所有接口 HTTP 200，而 Nest 对 POST 默认返回 201。
+> 早期版本就是这么错的——被 Swagger 文档"如实暴露"出来才发现。现在每个 POST 都标了 `@HttpCode(200)`，
+> 并且端到端里加了「成功的 POST 也必须是 200」的断言，回归时会被拦住。
 
 ## 目录结构
 

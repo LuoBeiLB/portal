@@ -1,5 +1,5 @@
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 import { AuthRateLimit } from '../../common/auth-rate-limit';
@@ -35,6 +35,8 @@ export class AuthController {
       '错误：2001 用户名已存在、2002 手机号已注册、1001 参数校验失败（`data.errors` 有字段级原因）。',
   })
   @Public()
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -68,6 +70,8 @@ export class AuthController {
       '错误：2003 账号或密码错误（后端不区分"用户不存在"与"密码错"，避免账号枚举）、2004 账号被禁用。',
   })
   @Public()
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -99,6 +103,8 @@ export class AuthController {
       'refresh 不轮换、单设备语义（一期从简）。错误 1002 = refresh 无效或过期，需重新登录。',
   })
   @Public()
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('refresh')
   async refresh(
     @Req() request: Request,
@@ -123,6 +129,8 @@ export class AuthController {
       '但本实现额外把当前 access token 也标记为已吊销（收紧到"登出即失效"）。\n\n' +
       '返回 `{ ok: true }`。需要携带 Bearer token。',
   })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('logout')
   async logout(
     @CurrentUser() user: AuthUser,

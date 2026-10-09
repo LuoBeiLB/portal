@@ -140,7 +140,11 @@ export class OrderService {
   }
 
   /** 我的订单列表（契约外补充；前端做"我的订单"页要用） */
-  async listMine(userId: string, page: number, size: number): Promise<{ list: OrderView[]; total: number; page: number; size: number }> {
+  async listMine(
+    userId: string,
+    page: number,
+    size: number,
+  ): Promise<{ list: OrderView[]; total: number; page: number; size: number }> {
     const [rows, total] = await this.orders.findAndCount({
       where: { userId },
       order: { id: 'DESC' },
@@ -202,7 +206,10 @@ export class OrderService {
           } catch (error) {
             // 余额不足/钱包冻结：停止处理后续项（其余项保持 0，可充值后再次支付）
             if (error instanceof BizException) {
-              stopReason.set(item.id, error.code === ErrorCode.WALLET_FROZEN ? 'WALLET_FROZEN' : 'INSUFFICIENT_BALANCE');
+              stopReason.set(
+                item.id,
+                error.code === ErrorCode.WALLET_FROZEN ? 'WALLET_FROZEN' : 'INSUFFICIENT_BALANCE',
+              );
               break;
             }
             throw error;
@@ -219,11 +226,7 @@ export class OrderService {
         throw new BizException(ErrorCode.INSUFFICIENT_BALANCE);
       }
 
-      await manager.update(
-        OrderItemEntity,
-        { id: In(succeededItemIds) },
-        { status: OrderItemStatus.PAID },
-      );
+      await manager.update(OrderItemEntity, { id: In(succeededItemIds) }, { status: OrderItemStatus.PAID });
 
       // 入队开通任务：order_item_id 唯一索引保证不会重复入队
       const now = new Date();
@@ -293,9 +296,7 @@ export class OrderService {
 
     const items = await manager.find(OrderItemEntity, { where: { orderId }, order: { id: 'ASC' } });
     const skuIds = [...new Set(items.map((item) => item.skuId))];
-    const products = skuIds.length
-      ? await manager.find(ProductEntity, { where: { skuId: In(skuIds) } })
-      : [];
+    const products = skuIds.length ? await manager.find(ProductEntity, { where: { skuId: In(skuIds) } }) : [];
     const nameOf = new Map(products.map((product) => [`${product.productCode}:${product.skuId}`, product.name]));
 
     return {

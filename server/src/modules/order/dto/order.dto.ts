@@ -126,3 +126,16 @@ export class ReportBillsDto {
   @Type(() => ReportBillItemDto)
   bills!: ReportBillItemDto[];
 }
+
+/** 手动触发对账（管理端补跑/排障） */
+export class RunReconciliationDto {
+  @ApiProperty({ description: '业务日（UTC），格式 YYYY-MM-DD', example: '2026-10-08' })
+  @IsString()
+  @MaxLength(10)
+  biz_date!: string;
+
+  @ApiProperty({ description: '产品代码', example: 'storage' })
+  @IsString()
+  @MaxLength(32)
+  product_code!: string;
+}

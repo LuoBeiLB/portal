@@ -13,7 +13,10 @@ import { PortalConfigService } from './portal-config.service';
  * 为什么不直接暴露在 /api 下：`/api/docs*` 是运维/联调口，生产由 nginx 决定是否放行；
  * 契约里对外业务接口只有 `/api/*` 的业务路径。
  */
-export function setupSwagger(app: INestApplication, config: PortalConfigService): { path: string; jsonPath: string } | null {
+export function setupSwagger(
+  app: INestApplication,
+  config: PortalConfigService,
+): { path: string; jsonPath: string } | null {
   if (!config.app.swaggerEnabled) return null;
 
   const builder = new DocumentBuilder()

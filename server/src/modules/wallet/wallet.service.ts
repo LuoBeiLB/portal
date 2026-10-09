@@ -80,7 +80,10 @@ export class WalletService {
    * 契约 §3.3 充值申请（人工核销）。
    * 一期唯一入金通道：申请 → 线下转账 → 管理员核销。
    */
-  async applyRecharge(userId: string, dto: RechargeApplyDto): Promise<{ apply_id: string; status: number; notice: string }> {
+  async applyRecharge(
+    userId: string,
+    dto: RechargeApplyDto,
+  ): Promise<{ apply_id: string; status: number; notice: string }> {
     const apply = await this.recharges.save(
       this.recharges.create({
         userId,
@@ -123,7 +126,11 @@ export class WalletService {
   }
 
   /** 充值核销队列 */
-  async listRecharges(status: number | undefined, page: number, size: number): Promise<PageView<Record<string, unknown>>> {
+  async listRecharges(
+    status: number | undefined,
+    page: number,
+    size: number,
+  ): Promise<PageView<Record<string, unknown>>> {
     const qb = this.recharges
       .createQueryBuilder('r')
       .leftJoin('u_user', 'u', 'u.id = r.user_id')
