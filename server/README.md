@@ -104,7 +104,7 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
 | `npm test` | 单元测试（37 项，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**81 项**：认证 / 钱包 / 核销 / 内网计费 / OpenAPI 文档） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**89 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / OpenAPI 文档） |
 | `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（53 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
 | `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（19 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
@@ -135,6 +135,28 @@ node scripts/e2e-round2.cjs                    # 另开终端，64 项端到端
 8. **门户不直连任何产品数据库**；跨系统只走契约里的 HTTP 接口（内网 + `X-Internal-Key`）。
 9. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund`、`/api/internal/reconciliation/report` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
 10. 密钥、密码、AK **不进仓库**：`.env` 与 `keys/` 已被 `.gitignore` 忽略。
+
+## 内网鉴权：密钥与产品身份**绑定**（重要不变量）
+
+> **密钥认证出的产品身份 = 内网接口里唯一可信的产品身份。请求体里的 `product_code` 只是"自报"，必须与它一致。**
+
+这条不是可选优化，是安全边界。早先的实现用 `products.some(...)` 只判断"密钥属于**某一个**已配置产品"，
+于是 **任意一个产品都能在 body 里写别人的 `product_code`**，把账记到别人头上、或退掉别人的账单。
+现在改成 `find(...)` 并把命中结果挂到 `request.internalProduct`：
+
+| 位置 | 规则 |
+|---|---|
+| `InternalKeyGuard` | 命中**唯一**产品才放行；命中多个（多家配了同一把密钥）→ **fail-closed 拒绝**并打 ERROR 日志 |
+| `ProductScopeGuard` | body 里的 `product_code` 与密钥归属不一致 → **1004**；不传 → 按密钥推定（兼容存量接入） |
+| `POST /wallet/deduct` | `productCode` 取 `@CurrentInternalProduct().code`，**不再读 dto** |
+| `POST /wallet/refund` | 不要求 body 带 `product_code`；改为校验**原账单归属**（`w_transaction.product_code`），跨产品退款 → **1004** |
+| `POST /internal/reconciliation/report` | 强制覆写 `product_code` 为认证结果，防止污染别的产品的对账口径 |
+
+**两条给接入方的硬约束**：
+1. **每家产品一把独立密钥**。若三家配成同一个值，门户会拒绝全部内网请求（这是有意的：配错要立刻炸，而不是静默取第一个）。
+2. **账单号必须带产品前缀**。`w_transaction.bill_no` 是**全局唯一**（`uk_txn_bill_no`），不是按产品唯一 ——
+   两个产品发出同样的 `bill_no` 时，后到的会被当成幂等重复（`3003`）而**扣不到钱**。
+   例：云存储的 `storage-20261009-000002` 安全；裸的 `20261009-000002` 早晚撞。
 
 ## 开通 worker（第 3 轮新增）
 
@@ -181,7 +203,9 @@ src/
 │  ├─ raw-response.decorator.ts
 │  ├─ all-exceptions.filter.ts # 业务失败也返回 HTTP 200
 │  ├─ jwt-auth.guard.ts        # 全局 JWT 鉴权（1002/1003 + 登出吊销检查）
-│  ├─ internal-key.guard.ts    # 契约 §4 内网 X-Internal-Key
+│  ├─ internal-key.guard.ts    # 契约 §4 内网 X-Internal-Key（**密钥 → 产品身份绑定**）
+│  ├─ internal-product.types.ts / .decorator.ts  # 身份载体与 @CurrentInternalProduct()
+│  ├─ product-scope.guard.ts   # body 自报的 product_code 必须与密钥归属一致，否则 1004
 │  ├─ admin.guard.ts           # 契约 §6 管理端 X-Admin-Key
 │  ├─ rate-limiter.service.ts  # Redis 固定窗口限流（故障降级放行）
 │  ├─ redis.{constants,provider,module,store}.ts

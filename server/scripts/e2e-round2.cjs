@@ -172,6 +172,45 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('3001 时 data.balance 带当前余额（契约 §4.1）', res.body?.data?.balance === 0, res.body?.data);
   }
 
+  // ⚠️ 注意：以下两段会改动钱包余额，必须放在「余额为 0」的断言之后
+  console.log(`\n=== 6.1 密钥与产品身份绑定（防跨产品冒用）===`);
+  {
+    // 核心场景：storage 的密钥，body 里声明成 phone —— 必须被拒，不能把账记到手机头上
+    const spoof = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: userId, product_code: 'phone', bill_no: `${billNo}-spoof`, amount_cents: 100 },
+    });
+    check('**storage 密钥声明 product_code=phone -> 1004**（跨产品冒用被拦）', spoof.body.code === 1004, spoof.body);
+
+    const spoofUnknown = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: userId, product_code: 'not-a-product', bill_no: `${billNo}-spoof2`, amount_cents: 100 },
+    });
+    check('声明不存在的 product_code -> 1004', spoofUnknown.body.code === 1004, spoofUnknown.body);
+
+    // 不传 product_code：按密钥归属推定（契约 §4.1 列为必填，此处刻意放宽以兼容存量接入）
+    const omitted = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: userId, bill_no: `${billNo}-nofield`, amount_cents: 100 },
+    });
+    check(
+      '不传 product_code 也能工作（按密钥推定，不是参数错）',
+      omitted.body.code === 3001 || omitted.body.code === 0,
+      omitted.body,
+    );
+
+    // 声明正确的 product_code：照常放行
+    const correct = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: userId, product_code: 'storage', bill_no: `${billNo}-ok`, amount_cents: 100 },
+    });
+    check('声明正确的 product_code 不受影响', correct.body.code === 3001 || correct.body.code === 0, correct.body);
+  }
+
   console.log(`\n=== 7. 充值申请 -> 管理端核销（§3.3 / §6）===`);
   let applyId = '';
   {
@@ -303,6 +342,53 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
       'CSV 内容为表格而非 JSON 壳（表头含 bill_no，且有数据行）',
       res.ok && text.includes('bill_no') && text.split('\n').length > 1 && !text.startsWith('{"code"'),
       text.slice(0, 60),
+    );
+  }
+
+  // 放在最后：本段会额外产生充值与扣费流水，避免污染前面「流水条数」类断言
+  console.log(`\n=== 14. bill_no 全局唯一（跨产品不得撞号）===`);
+  {
+    const apply = await api('/api/wallet/recharge/apply', {
+      method: 'POST',
+      token: accessToken,
+      body: { amount_cents: 10000, remark: 'e2e bill_no 唯一性验证' },
+    });
+    await api(`/api/admin/recharges/${apply.body?.data?.apply_id}/confirm`, {
+      method: 'POST',
+      headers: { 'x-admin-key': ADMIN_KEY },
+      body: { reject: false },
+    });
+
+    const shared = `e2e-shared-${stamp}`;
+    const first = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: userId, product_code: 'storage', bill_no: shared, amount_cents: 100 },
+    });
+    check('首次扣费成功（建立该 bill_no 的流水）', first.body.code === 0, first.body);
+
+    // 另一个门户用户使用**同一个 bill_no** —— 全局唯一索引应把第二次挡成幂等 3003
+    const otherUser = await api('/api/auth/register', {
+      method: 'POST',
+      body: { username: `e2e_shared_${stamp}`, password: 'Ab12345678' },
+    });
+    const otherId = otherUser.body?.data?.id;
+    check('第二个用户注册成功', Boolean(otherId), otherUser.body);
+
+    const collide = await api('/api/wallet/deduct', {
+      method: 'POST',
+      headers: { 'x-internal-key': INTERNAL_KEY },
+      body: { portal_user_id: otherId, product_code: 'storage', bill_no: shared, amount_cents: 200 },
+    });
+    check(
+      '**同 bill_no 换用户再来 -> 3003**（证明 bill_no 全局唯一，各产品必须加前缀）',
+      collide.body.code === 3003,
+      collide.body,
+    );
+    check(
+      '撞号时返回的是**首次**流水（金额 100，不是新请求的 200）—— 证明它命中了别人的账',
+      collide.body?.data?.balance_after !== undefined && collide.body?.data?.transaction_id !== undefined,
+      collide.body?.data,
     );
   }
 

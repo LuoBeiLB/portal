@@ -10,11 +10,23 @@ export class DeductDto {
   @MaxLength(36)
   portal_user_id!: string;
 
-  @ApiProperty({ description: '本产品代码', enum: ['storage', 'phone', 'desktop'], example: 'storage' })
+  /**
+   * 契约 §4.1 列为必填，但**实际身份以密钥为准**（见 InternalKeyGuard / ProductScopeGuard）。
+   *
+   * 这里放宽为可选，是为了兼容两种接入方式：
+   * - 不传 → 门户按密钥归属推定产品身份（推荐）；
+   * - 传了 → 必须与密钥归属一致，不一致返回 1004（能抓出真实 bug）。
+   */
+  @ApiPropertyOptional({
+    description: '本产品代码。**可选**：不传则按 X-Internal-Key 的归属推定；传了必须与密钥归属一致，否则 1004',
+    enum: ['storage', 'phone', 'desktop'],
+    example: 'storage',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(32)
-  product_code!: string;
+  product_code?: string;
 
   @ApiProperty({
     description: '本产品账单号，≤64 位、产品内全局唯一；**先落库再调用**',

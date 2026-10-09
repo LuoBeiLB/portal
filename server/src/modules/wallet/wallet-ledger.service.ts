@@ -169,6 +169,12 @@ export class WalletLedgerService {
     refundBillNo: string;
     amountCents: number;
     reason?: string | null;
+    /**
+     * 调用方产品身份（来自 X-Internal-Key 的归属）。传入时会校验原账单是否属于该产品：
+     * **产品只能用自己密钥退自己的账单**，否则 1004。
+     * 门户内部调用（如订单失败自动退款）不传，跳过该校验。
+     */
+    callerProductCode?: string;
   }): Promise<RefundResult> {
     if (input.amountCents <= 0) {
       throw new BizException(ErrorCode.PARAM_INVALID, 'amount_cents 必须大于 0');
@@ -188,6 +194,15 @@ export class WalletLedgerService {
         where: { billNo: input.billNo, type: TransactionType.DEDUCT },
       });
       if (!origin) throw new BizException(ErrorCode.ORIGIN_BILL_NOT_FOUND);
+
+      // 归属校验：产品 A 的密钥不得退掉产品 B 的账单。
+      // productCode 为 NULL 的是门户内部流水（充值/调账），不受产品身份约束。
+      if (input.callerProductCode && origin.productCode !== null && origin.productCode !== input.callerProductCode) {
+        throw new BizException(
+          ErrorCode.FORBIDDEN,
+          `该账单属于 ${origin.productCode}，当前密钥（${input.callerProductCode}）无权退款`,
+        );
+      }
 
       // 退款退回原扣费的那张钱包；调用方传了 userId 也只作参考，防止退错人
       const userId = origin.userId;

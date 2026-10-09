@@ -5,6 +5,9 @@ import { Repository } from 'typeorm';
 
 import { BizException, ErrorCode } from '../../common/error-code';
 import { InternalKeyGuard } from '../../common/internal-key.guard';
+import { CurrentInternalProduct } from '../../common/internal-product.decorator';
+import { InternalProduct } from '../../common/internal-product.types';
+import { ProductScopeGuard } from '../../common/product-scope.guard';
 import { Public } from '../../common/public.decorator';
 import { withBizCode } from '../../common/response.interceptor';
 import { UserEntity } from '../user/entities/user.entity';
@@ -16,11 +19,14 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
  *
  * ⚠️ 安全前提：这些接口**只校验 X-Internal-Key**，必须由防火墙/nginx 保证不对公网暴露
  * （契约附录自检项）。响应遵循 §0.2；幂等重复按 §4.1 返回 code=3003 且 data 为首次结果。
+ *
+ * ⚠️ 产品身份纪律：一律用 `@CurrentInternalProduct()` 拿到的身份（来自密钥归属），
+ * **不要**用请求体自报的 `product_code` —— 那是未经验证的声明，会被 ProductScopeGuard 拦。
  */
 @ApiTags('内网计费 internal')
 @ApiSecurity('internal-key')
 @Public()
-@UseGuards(InternalKeyGuard)
+@UseGuards(InternalKeyGuard, ProductScopeGuard)
 @Controller('wallet')
 export class InternalWalletController {
   constructor(
@@ -39,14 +45,15 @@ export class InternalWalletController {
   @HttpCode(200)
   @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('deduct')
-  async deduct(@Body() dto: DeductDto): Promise<unknown> {
+  async deduct(@Body() dto: DeductDto, @CurrentInternalProduct() product: InternalProduct): Promise<unknown> {
     await this.assertUserExists(dto.portal_user_id);
 
     const result = await this.ledger.deduct({
       userId: dto.portal_user_id,
       billNo: dto.bill_no,
       amountCents: dto.amount_cents,
-      productCode: dto.product_code,
+      // 身份以密钥归属为准（ProductScopeGuard 已确保 dto.product_code 与之一致或未传）
+      productCode: product.code,
       detail: dto.detail ?? null,
     });
 
@@ -70,12 +77,14 @@ export class InternalWalletController {
   @HttpCode(200)
   @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('refund')
-  async refund(@Body() dto: RefundDto): Promise<unknown> {
+  async refund(@Body() dto: RefundDto, @CurrentInternalProduct() product: InternalProduct): Promise<unknown> {
     const result = await this.ledger.refund({
       billNo: dto.bill_no,
       refundBillNo: dto.refund_bill_no,
       amountCents: dto.amount_cents,
       reason: dto.reason ?? null,
+      // 退款不要求请求体带 product_code：判据是「原账单归属」，由 ledger 校验
+      callerProductCode: product.code,
     });
 
     const data = {

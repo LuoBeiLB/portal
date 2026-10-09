@@ -3,6 +3,9 @@ import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs
 
 import { AdminGuard } from '../../common/admin.guard';
 import { InternalKeyGuard } from '../../common/internal-key.guard';
+import { CurrentInternalProduct } from '../../common/internal-product.decorator';
+import { InternalProduct } from '../../common/internal-product.types';
+import { ProductScopeGuard } from '../../common/product-scope.guard';
 import { Public } from '../../common/public.decorator';
 import { ReportBillsDto, RunReconciliationDto } from '../order/dto/order.dto';
 import { ProvisionWorker } from '../order/provision.worker';
@@ -67,7 +70,7 @@ export class AdminReconciliationController {
 @ApiTags('内网计费 internal')
 @ApiSecurity('internal-key')
 @Public()
-@UseGuards(InternalKeyGuard)
+@UseGuards(InternalKeyGuard, ProductScopeGuard)
 @Controller('internal/reconciliation')
 export class InternalReconciliationController {
   constructor(private readonly reconciliation: ReconciliationService) {}
@@ -77,12 +80,17 @@ export class InternalReconciliationController {
     description:
       '产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n' +
       '幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n' +
+      '**`product_code` 以 `X-Internal-Key` 的归属为准**：传了必须一致（否则 1004），不传则按密钥推定。\n\n' +
       '需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。',
   })
   @HttpCode(200)
   @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('report')
-  async report(@Body() dto: ReportBillsDto): Promise<Record<string, unknown>> {
-    return { ...(await this.reconciliation.reportBills(dto)) };
+  async report(
+    @Body() dto: ReportBillsDto,
+    @CurrentInternalProduct() product: InternalProduct,
+  ): Promise<Record<string, unknown>> {
+    // 强制用认证结果：防止产品把自己的账报到别人的 product_code 下（会污染对账口径）
+    return { ...(await this.reconciliation.reportBills({ ...dto, product_code: product.code })) };
   }
 }
