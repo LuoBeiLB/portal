@@ -37,11 +37,11 @@ export function setupSwagger(
       'bearer',
     )
     .addApiKey({ type: 'apiKey', name: 'X-Internal-Key', in: 'header' }, 'internal-key')
-    .addApiKey({ type: 'apiKey', name: 'X-Admin-Key', in: 'header' }, 'admin-key')
-    .addTag('认证 auth', '契约 §1：注册 / 登录 / 刷新 / 登出 / JWKS')
+    // 2026-10-10 起管理端改用管理员账号（role=admin 的 JWT），X-Admin-Key 方案已删除
+    .addTag('认证 auth', '契约 §1：注册 / 登录 / 刷新 / 登出 / JWKS / 改密')
     .addTag('钱包 wallet', '契约 §3：余额 / 流水 / 充值申请')
     .addTag('内网计费 internal', '契约 §4：产品 → 门户（X-Internal-Key，仅内网）')
-    .addTag('管理端 admin', '契约 §6：充值核销 / 流水导出（X-Admin-Key）')
+    .addTag('管理端 admin', '契约 §6：充值核销 / 用户管理 / 流水与日志 / 管理员账号（Bearer，需 role=admin）')
     .addTag('商城 shop', '契约 §2：商品与订单（round 3 实现）')
     .addTag('运维 ops', '探活与元信息')
     .build();

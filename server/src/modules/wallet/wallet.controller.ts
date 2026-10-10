@@ -1,12 +1,20 @@
-import { ApiBearerAuth, ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
-import { Response } from 'express';
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Request, Response } from 'express';
 
 import { AdminGuard } from '../../common/admin.guard';
 import { CurrentUser, AuthUser } from '../../common/current-user.decorator';
-import { Public } from '../../common/public.decorator';
 import { RawResponse } from '../../common/raw-response.decorator';
-import { ConfirmRechargeDto, RechargeQueryDto, RechargeApplyDto, TransactionQueryDto } from './dto/wallet.dto';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+import { AuditService } from '../audit/audit.service';
+import {
+  ConfirmRechargeDto,
+  ExportTransactionQueryDto,
+  MyRechargeQueryDto,
+  RechargeQueryDto,
+  RechargeApplyDto,
+  TransactionQueryDto,
+} from './dto/wallet.dto';
 import { WalletService } from './wallet.service';
 
 /** 契约 §3 钱包接口（用户端，Bearer 鉴权） */
@@ -55,19 +63,48 @@ export class WalletController {
   async applyRecharge(@CurrentUser() user: AuthUser, @Body() dto: RechargeApplyDto): Promise<Record<string, unknown>> {
     return this.wallet.applyRecharge(user.id, dto);
   }
+
+  /** 我的充值记录（2026-10-10 新增，前端需求单） */
+  @ApiOperation({
+    summary: '我的充值记录（契约外补充）',
+    description:
+      '返回**当前登录用户自己**的充值申请，按下单时间倒序。\n\n' +
+      '为什么需要：充值走「申请 → 线下转账 → 管理员人工核销」，在此之前用户看不到核销进度。\n\n' +
+      '`status`：`0` 待核销 / `1` 已到账 / `2` 驳回（可筛选，前端做成四个 tab）。\n\n' +
+      '`balance_after` **仅在已到账时非空**（取自核销时写入的流水），其余状态为 `null`。\n' +
+      '`reject_reason` **仅在驳回时非空**。\n\n' +
+      '与管理端 `GET /api/admin/recharges` 参数一致，但不返回 `username` / `phone`（用户不需要看自己的）。',
+  })
+  @Get('recharges')
+  async listMyRecharges(
+    @CurrentUser() user: AuthUser,
+    @Query() query: MyRechargeQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return {
+      ...(await this.wallet.listMyRecharges(user.id, query.status, query.page, query.effectiveSize)),
+    };
+  }
 }
 
 /**
- * 契约 §6 管理端接口（一期用 X-Admin-Key，见 AdminGuard）。
- * 放在同一控制器便于对照契约章节，路由仍是 /admin/*。
+ * 契约 §6 管理端接口（充值核销队列 / 核销 / 流水导出）。
+ *
+ * 鉴权：**管理员账号**（`role=admin` 的 JWT），由 `AdminGuard` 校验。
+ * 2026-10-10 起废弃静态 `X-Admin-Key`：它无法区分操作人，
+ * `?admin_id=` 那种"经办人由前端自报"的设计让审计完全不可信。
+ *
+ * ⚠️ 刻意**不标 `@Public()`**：必须经过全局 `JwtAuthGuard` 填充 `request.user`，
+ * `AdminGuard` 才能读到角色。
  */
 @ApiTags('管理端 admin')
-@ApiSecurity('admin-key')
-@Public()
+@ApiBearerAuth('bearer')
 @UseGuards(AdminGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly wallet: WalletService) {}
+  constructor(
+    private readonly wallet: WalletService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** §6 充值核销队列 `GET /admin/recharges?status=0` */
   @ApiOperation({
@@ -86,39 +123,66 @@ export class AdminController {
     description:
       '条件更新抢占状态（`WHERE id=? AND status=0`）：**重复核销会被拒**，防止两个管理员同时点通过导致重复增额。\n\n' +
       '到账会加余额并写 type=1 流水；入金失败会自动退回待核销，不会留"已到账但没加钱"的悬空单。\n\n' +
-      '`admin_id` 为审核人标识（一期由调用方传入）。',
+      '**经办人取自当前登录的管理员**（不再接受 `?admin_id=` 传参，避免伪造）。操作写入审计日志。',
   })
   @HttpCode(200)
   @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('recharges/:id/confirm')
   async confirm(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: ConfirmRechargeDto,
-    @Query('admin_id') adminId?: string,
+    @Req() request: Request,
   ): Promise<Record<string, unknown>> {
-    // 一期没有 role 列，审核人标识由调用方传入（X-Admin-Key 属系统级凭证）
-    return this.wallet.confirmRecharge(id, adminId ?? 'admin', Boolean(body?.reject), body?.reason);
+    // 经办人来自已验证的 JWT，不再接受前端自报。
+    // `reviewed_by` 列是 CHAR(36)，存的是管理员 user_id（不是用户名）。
+    const result = await this.wallet.confirmRecharge(id, user.id, Boolean(body?.reject), body?.reason);
+
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: body?.reject ? AuditAction.RECHARGE_REJECT : AuditAction.RECHARGE_CONFIRM,
+      target: `apply:${id}`,
+      detail: {
+        reject: Boolean(body?.reject),
+        reason: body?.reason ?? null,
+        amount_cents: (result as { amount_cents?: number })?.amount_cents ?? null,
+        balance_cents: (result as { balance_cents?: number })?.balance_cents ?? null,
+      },
+      ip: this.audit.ipOf(request),
+    });
+
+    return result;
   }
 
   /** §6 流水导出（CSV）：管理端对账下载。标 @RawResponse() 避免被套成 JSON 壳 */
   @ApiOperation({
     summary: '流水导出 CSV（契约 §6）',
     description:
-      '返回 `text/csv`（带 BOM，Excel 打开中文不乱码），**不是 JSON**，前端应直接触发下载而不是当接口数据解析。' +
-      '默认导出最近 5000 行，支持 type / product_code 过滤。',
+      '返回 `text/csv`（带 BOM，Excel 打开中文不乱码），**不是 JSON**，前端应直接触发下载而不是当接口数据解析。\n\n' +
+      '支持 `type` / `product_code` / `start_date` / `end_date`（UTC 自然日，含当日）过滤；\n' +
+      '`limit` 控制最大行数（缺省 5000，上限 50000）—— 导出是数据外泄面，必须可界定范围。\n\n' +
+      '导出动作会写入审计日志。',
   })
   @RawResponse()
   @Get('transactions/export')
-  async exportTransactions(@Query() query: TransactionQueryDto, @Res() response: Response): Promise<void> {
-    // 复用分页查询，导出上限 5000 行；CSV 加 BOM 保证 Excel 打开中文不乱码
-    const page = await this.wallet.listTransactionsByAdmin({
-      page: 1,
-      size: 5000,
+  async exportTransactions(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ExportTransactionQueryDto,
+    @Req() request: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    const limit = Math.min(query.limit ?? 5000, 50_000);
+    const rows = await this.wallet.listTransactionsForExport({
+      limit,
       type: query.type,
       product_code: query.product_code,
+      start_date: query.start_date,
+      end_date: query.end_date,
     });
+
     const header = 'id,type,amount_cents,balance_after,product_code,bill_no,refund_of_bill_no,created_at';
-    const lines = page.list.map((row) =>
+    const lines = rows.map((row) =>
       [
         row.id,
         row.type,
@@ -130,11 +194,29 @@ export class AdminController {
         row.created_at,
       ].join(','),
     );
+
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
     response.setHeader(
       'Content-Disposition',
       `attachment; filename="transactions-${new Date().toISOString().slice(0, 10)}.csv"`,
     );
     response.send(`\uFEFF${[header, ...lines].join('\n')}`);
+
+    // 导出是数据外泄面，必须留痕（在响应发出后记录，不影响下载）
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.TRANSACTION_EXPORT,
+      target: 'transactions:csv',
+      detail: {
+        rows: rows.length,
+        limit,
+        type: query.type ?? null,
+        product_code: query.product_code ?? null,
+        start_date: query.start_date ?? null,
+        end_date: query.end_date ?? null,
+      },
+      ip: this.audit.ipOf(request),
+    });
   }
 }

@@ -51,7 +51,26 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
       return Promise.resolve({ sub: 'user-1', uname: 'luobo' });
     });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
-    expect(request.user).toEqual({ id: 'user-1', username: 'luobo' });
+    // 2026-10-10 起守卫额外写入 role；旧版 token 没有 role claim → 一律按普通用户（绝不因此放行管理员）
+    expect(request.user).toEqual({ id: 'user-1', username: 'luobo', role: 'user' });
+  });
+
+  it('JWT 带 role=admin 时写入 request.user.role（管理端鉴权靠它）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer admin-token' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () => Promise.resolve({ sub: 'admin-1', uname: 'admin', role: 'admin' }));
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(request.user).toEqual({ id: 'admin-1', username: 'admin', role: 'admin' });
+  });
+
+  it('role 值非法（如伪造 "ADMIN" / 任意字符串）时降级为普通用户', async () => {
+    for (const fakeRole of ['ADMIN', 'superuser', '', null]) {
+      const request: FakeRequest = { headers: { authorization: 'Bearer t' } };
+      const { ctx, reflector } = contextOf(request);
+      const guard = guardOf(reflector, () => Promise.resolve({ sub: 'u', uname: 'n', role: fakeRole }));
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+      expect(request.user?.role).toBe('user');
+    }
   });
 
   it('token 过期 → 1003（前端据此走 refresh）', async () => {

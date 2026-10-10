@@ -4,12 +4,21 @@ import { JwtService } from '@nestjs/jwt';
 import { sha256Hex, randomToken } from '../../common/crypto.util';
 import { RedisStore } from '../../common/redis-store.service';
 import { PortalConfigService } from '../../config/portal-config.service';
+import { UserRole } from '../user/entities/user-status.enum';
 
 export interface AccessTokenPayload {
   /** 门户用户 UUID */
   sub: string;
   /** 用户名 */
   uname: string;
+  /**
+   * 角色（2026-10-10 新增）。
+   *
+   * 写进 JWT 而不是每次查库：管理端每个请求都要判断"是不是管理员"，
+   * 而 access token 只有 2 小时有效期，角色变更后最迟 2 小时生效——这个延迟可接受。
+   * （禁用/降权时我们会吊销该用户全部 refresh 会话，所以实际生效更快。）
+   */
+  role: UserRole;
 }
 
 export interface AccessTokenIssued {
@@ -39,10 +48,10 @@ export class TokenService {
     private readonly config: PortalConfigService,
   ) {}
 
-  async issueAccessToken(userId: string, username: string): Promise<AccessTokenIssued> {
+  async issueAccessToken(userId: string, username: string, role: UserRole): Promise<AccessTokenIssued> {
     const expiresIn = this.config.jwt.accessTtlSeconds;
     const accessToken = await this.jwtService.signAsync(
-      { sub: userId, uname: username },
+      { sub: userId, uname: username, role },
       {
         algorithm: 'RS256',
         issuer: this.config.jwt.issuer,

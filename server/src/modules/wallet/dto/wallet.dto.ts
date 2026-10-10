@@ -1,6 +1,37 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
+
+import { isIsoDateString } from '../../../common/date.util';
+
+/**
+ * 校验 `YYYY-MM-DD` 且必须是真实存在的日历日期。
+ * 只查格式的正则会放行 `2026-13-45`，而它在 SQL 字符串比较里静默返回空结果
+ * （前端看到"没数据"而不是"参数错误"）—— 实测踩过。
+ */
+@ValidatorConstraint({ name: 'isoDate', async: false })
+class IsoDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return value === undefined || value === null || value === '' || isIsoDateString(value);
+  }
+
+  defaultMessage(): string {
+    return '$property 需为合法的 YYYY-MM-DD 日期';
+  }
+}
 
 /** 查询参数统一按契约 §0.4：`?page=1&size=20` */
 export class PageQueryDto {
@@ -95,4 +126,56 @@ export class RechargeQueryDto extends PageQueryDto {
   @IsInt()
   @IsIn([0, 1, 2], { message: 'status 只能是 0待核销 1已到账 2驳回' })
   status?: number;
+}
+
+/**
+ * 用户端「我的充值记录」查询（2026-10-10 新增）。
+ *
+ * 与管理端 `RechargeQueryDto` 参数完全一致，区别只在鉴权与返回字段：
+ * 用户端按 JWT 的 sub 过滤、不返回 username/phone。
+ */
+export class MyRechargeQueryDto extends RechargeQueryDto {}
+
+/**
+ * 契约 §6 流水导出查询。
+ *
+ * 相比列表接口额外支持**日期区间**（管理端最常用的是"导出某天的流水"）
+ * 与**行数上限**（导出是数据外泄面，不做无限导出）。
+ */
+export class ExportTransactionQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ description: '流水类型', enum: [1, 2, 3, 4], example: 2 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([1, 2, 3, 4], { message: 'type 只能是 1充值 2扣费 3退款 4调账' })
+  type?: number;
+
+  @ApiPropertyOptional({ description: '产品代码过滤', enum: ['storage', 'phone', 'desktop'], example: 'storage' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  product_code?: string;
+
+  @ApiPropertyOptional({ description: '起始日 YYYY-MM-DD（UTC，含当日）', example: '2026-10-01' })
+  @IsOptional()
+  @Validate(IsoDateConstraint)
+  start_date?: string;
+
+  @ApiPropertyOptional({ description: '结束日 YYYY-MM-DD（UTC，含当日）', example: '2026-10-10' })
+  @IsOptional()
+  @Validate(IsoDateConstraint)
+  end_date?: string;
+
+  @ApiPropertyOptional({
+    description: '最大导出行数（上限 50000，缺省 5000）',
+    example: 5000,
+    minimum: 1,
+    maximum: 50000,
+  })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === null || value === '' ? undefined : Number(value)))
+  @IsInt()
+  @Min(1)
+  @Max(50_000)
+  limit?: number;
 }

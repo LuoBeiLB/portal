@@ -77,6 +77,65 @@ export class WalletService {
   }
 
   /**
+   * 用户端「我的充值记录」（2026-10-10 新增，前端需求单《接口需求_用户端充值记录》）。
+   *
+   * 为什么需要：用户提交充值申请后走的是**线下转账 + 管理员人工核销**，
+   * 在此之前没有任何用户端接口能查核销进度，用户只能干等。
+   *
+   * `balance_after` 不在 `w_recharge_apply` 表里，而是核销到账时写在流水上
+   * （`bill_no = recharge:{apply_id}`），所以这里按 bill_no 精确回查。
+   * 未到账（status ≠ 1）时为 null —— 与前端约定一致。
+   */
+  async listMyRecharges(
+    userId: string,
+    status: number | undefined,
+    page: number,
+    size: number,
+  ): Promise<PageView<Record<string, unknown>>> {
+    const qb = this.recharges
+      .createQueryBuilder('r')
+      .where('r.user_id = :userId', { userId })
+      .orderBy('r.id', 'DESC')
+      .skip((page - 1) * size)
+      .take(size);
+
+    if (status !== undefined) qb.andWhere('r.status = :status', { status });
+
+    const [rows, total] = await qb.getManyAndCount();
+
+    // 已到账的单据回查「到账后余额」：一次 IN 查询，避免 N+1
+    const creditedIds = rows.filter((row) => row.status === RechargeStatus.CONFIRMED).map((row) => row.id);
+    const balanceMap = new Map<string, number>();
+    if (creditedIds.length > 0) {
+      const txns = await this.transactions
+        .createQueryBuilder('t')
+        .select(['t.billNo', 't.balanceAfter'])
+        .where('t.bill_no IN (:...billNos)', { billNos: creditedIds.map((id) => `recharge:${id}`) })
+        .getMany();
+      for (const txn of txns) {
+        const applyId = txn.billNo.replace(/^recharge:/, '');
+        balanceMap.set(applyId, Number(txn.balanceAfter));
+      }
+    }
+
+    return {
+      list: rows.map((row) => ({
+        apply_id: row.id,
+        amount_cents: Number(row.amountCents),
+        status: row.status,
+        // 仅已到账时非空（流水缺失时也返回 null，不让前端拿到 0 误以为是真实余额）
+        balance_after: balanceMap.get(row.id) ?? null,
+        reject_reason: row.rejectReason,
+        remark: row.remark,
+        created_at: toIso(row.createdAt),
+      })),
+      total,
+      page,
+      size,
+    };
+  }
+
+  /**
    * 契约 §3.3 充值申请（人工核销）。
    * 一期唯一入金通道：申请 → 线下转账 → 管理员核销。
    */
@@ -125,6 +184,34 @@ export class WalletService {
     };
   }
 
+  /**
+   * 管理端导出：按类型 / 产品 / **日期区间**过滤，最多 `limit` 行，按时间倒序。
+   *
+   * 日期按 UTC 自然日、**含当日**（前端最常用的是"导出某天的流水"）。
+   * 导出是数据外泄面，所以由调用方显式给定行数上限，不做无限导出。
+   */
+  async listTransactionsForExport(filter: {
+    limit: number;
+    type?: number;
+    product_code?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<TransactionView & { user_id: string }>> {
+    const qb = this.transactions.createQueryBuilder('t').orderBy('t.id', 'DESC').take(filter.limit);
+
+    if (filter.type) qb.andWhere('t.type = :type', { type: filter.type });
+    if (filter.product_code) qb.andWhere('t.product_code = :productCode', { productCode: filter.product_code });
+    if (filter.start_date) {
+      qb.andWhere('t.created_at >= :start', { start: `${filter.start_date} 00:00:00.000` });
+    }
+    if (filter.end_date) {
+      qb.andWhere('t.created_at <= :end', { end: `${filter.end_date} 23:59:59.999` });
+    }
+
+    const rows = await qb.getMany();
+    return rows.map((row) => ({ ...toTransactionView(row), user_id: row.userId }));
+  }
+
   /** 充值核销队列 */
   async listRecharges(
     status: number | undefined,
@@ -142,11 +229,15 @@ export class WalletService {
     if (status !== undefined) qb.andWhere('r.status = :status', { status });
 
     const [rows, total] = await qb.getManyAndCount();
+
+    // 一次查出涉及的「用户」与「核销管理员」，避免 N+1
     const userIds = [...new Set(rows.map((row) => row.userId))];
-    const users = userIds.length
+    const reviewerIds = [...new Set(rows.map((row) => row.reviewedBy).filter((id): id is string => Boolean(id)))];
+    const allIds = [...new Set([...userIds, ...reviewerIds])];
+    const users = allIds.length
       ? await this.dataSource.query<Array<{ id: string; username: string; phone: string | null }>>(
-          `SELECT id, username, phone FROM u_user WHERE id IN (${userIds.map(() => '?').join(',')})`,
-          userIds,
+          `SELECT id, username, phone FROM u_user WHERE id IN (${allIds.map(() => '?').join(',')})`,
+          allIds,
         )
       : [];
     const userMap = new Map(users.map((user) => [user.id, user]));
@@ -162,6 +253,9 @@ export class WalletService {
         status: row.status,
         created_at: toIso(row.createdAt),
         reviewed_at: toIso(row.reviewedAt),
+        // 经办人：reviewed_by 存的是管理员 user_id，这里补上用户名便于管理端展示
+        reviewed_by: row.reviewedBy,
+        reviewed_by_username: row.reviewedBy ? (userMap.get(row.reviewedBy)?.username ?? null) : null,
         reject_reason: row.rejectReason,
       })),
       total,

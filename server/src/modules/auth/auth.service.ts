@@ -4,7 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 
 import { uuidv7 } from '../../common/crypto.util';
 import { BizException, ErrorCode } from '../../common/error-code';
-import { UserStatus } from '../user/entities/user-status.enum';
+import { UserRole, UserStatus } from '../user/entities/user-status.enum';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { LoginDto } from './dto/login.dto';
@@ -60,6 +60,9 @@ export class AuthService {
           username: dto.username,
           phone: dto.phone ?? null,
           passwordHash,
+          // ⚠️ 角色**写死普通用户**，绝不从请求体读取 —— 否则任何人都能注册出管理员。
+          // 管理员只能由环境变量 bootstrap 或 POST /api/admin/admins 创建。
+          role: UserRole.USER,
           status: UserStatus.NORMAL,
           createdAt: now,
           updatedAt: now,
@@ -77,7 +80,7 @@ export class AuthService {
     }
 
     const user = await this.users.findOneOrFail({ where: { id } });
-    const tokens = await this.issueTokens(user.id, user.username);
+    const tokens = await this.issueTokens(user.id, user.username, user.role);
 
     return {
       tokens,
@@ -104,7 +107,7 @@ export class AuthService {
     const ok = await this.password.verify(user.passwordHash, dto.password);
     if (!ok) throw new BizException(ErrorCode.BAD_CREDENTIALS);
 
-    const tokens = await this.issueTokens(user.id, user.username);
+    const tokens = await this.issueTokens(user.id, user.username, user.role);
     return { tokens, user: { id: user.id, username: user.username } };
   }
 
@@ -125,7 +128,7 @@ export class AuthService {
       throw new BizException(ErrorCode.ACCOUNT_DISABLED);
     }
 
-    const access = await this.tokens.issueAccessToken(user.id, user.username);
+    const access = await this.tokens.issueAccessToken(user.id, user.username, user.role);
     return {
       access_token: access.accessToken,
       expires_in: access.expiresIn,
@@ -147,8 +150,39 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async issueTokens(userId: string, username: string): Promise<AuthTokens> {
-    const access = await this.tokens.issueAccessToken(userId, username);
+  /**
+   * 修改自己的密码（`POST /api/auth/password`）。
+   *
+   * 行为：
+   * 1. 校验旧密码（防止 access token 被盗后直接改密锁死账号）；
+   * 2. 写入新哈希；
+   * 3. **吊销该用户全部 refresh 会话** —— 密码已变，旧会话必须失效（所有设备强制重登）；
+   * 4. 拒绝"新密码与旧密码相同"（否则等于没改，却把所有人踢下线）。
+   */
+  async changePassword(
+    user: { id: string; username: string; role: UserRole },
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true; revoked_sessions: number }> {
+    const entity = await this.users.findOne({ where: { id: user.id } });
+    if (!entity) throw new BizException(ErrorCode.UNAUTHENTICATED);
+
+    const ok = await this.password.verify(entity.passwordHash, oldPassword);
+    if (!ok) throw new BizException(ErrorCode.BAD_CREDENTIALS, '当前密码错误');
+
+    if (oldPassword === newPassword) {
+      throw new BizException(ErrorCode.PARAM_INVALID, '新密码不能与当前密码相同');
+    }
+
+    const passwordHash = await this.password.hash(newPassword);
+    await this.users.update({ id: user.id }, { passwordHash, updatedAt: new Date() });
+
+    const revoked = await this.tokens.revokeAllSessions(user.id);
+    return { ok: true, revoked_sessions: revoked };
+  }
+
+  private async issueTokens(userId: string, username: string, role: UserRole): Promise<AuthTokens> {
+    const access = await this.tokens.issueAccessToken(userId, username, role);
     const refreshToken = await this.tokens.issueRefreshToken(userId);
     return { access_token: access.accessToken, expires_in: access.expiresIn, refresh_token: refreshToken };
   }

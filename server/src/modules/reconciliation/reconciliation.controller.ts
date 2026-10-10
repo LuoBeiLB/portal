@@ -1,30 +1,37 @@
-import { ApiOkResponse, ApiOperation, ApiQuery, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 
 import { AdminGuard } from '../../common/admin.guard';
+import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
 import { InternalKeyGuard } from '../../common/internal-key.guard';
 import { CurrentInternalProduct } from '../../common/internal-product.decorator';
 import { InternalProduct } from '../../common/internal-product.types';
 import { ProductScopeGuard } from '../../common/product-scope.guard';
 import { Public } from '../../common/public.decorator';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+import { AuditService } from '../audit/audit.service';
 import { ReportBillsDto, RunReconciliationDto } from '../order/dto/order.dto';
 import { ProvisionWorker } from '../order/provision.worker';
 import { ReconciliationService } from './reconciliation.service';
 
 /**
  * 对账相关接口。
- * - `/api/admin/reconciliation/*`：管理端（X-Admin-Key）
+ * - `/api/admin/reconciliation/*`：管理端（**管理员账号**，`role=admin` 的 JWT）
  * - `/api/internal/reconciliation/report`：产品侧上报账单（X-Internal-Key）
+ *
+ * ⚠️ 管理端**刻意不标 `@Public()`**：必须经过全局 JwtAuthGuard 填充 `request.user`，
+ * `AdminGuard` 才能读到角色（2026-10-10 起废弃静态 X-Admin-Key）。
  */
 @ApiTags('管理端 admin')
-@ApiSecurity('admin-key')
-@Public()
+@ApiBearerAuth('bearer')
 @UseGuards(AdminGuard)
 @Controller('admin/reconciliation')
 export class AdminReconciliationController {
   constructor(
     private readonly reconciliation: ReconciliationService,
     private readonly worker: ProvisionWorker,
+    private readonly audit: AuditService,
   ) {}
 
   @ApiOperation({
@@ -53,8 +60,23 @@ export class AdminReconciliationController {
   @HttpCode(200)
   @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
   @Post('run')
-  async run(@Body() body: RunReconciliationDto): Promise<Record<string, unknown>> {
-    return { ...(await this.reconciliation.reconcile(body.biz_date, body.product_code)) };
+  async run(
+    @CurrentUser() user: AuthUser,
+    @Body() body: RunReconciliationDto,
+    @Req() request: Request,
+  ): Promise<Record<string, unknown>> {
+    const result = await this.reconciliation.reconcile(body.biz_date, body.product_code);
+
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.RECONCILIATION_RUN,
+      target: `recon:${body.biz_date}:${body.product_code}`,
+      detail: { ...(result as unknown as Record<string, unknown>) },
+      ip: this.audit.ipOf(request),
+    });
+
+    return { ...result };
   }
 
   @ApiOperation({

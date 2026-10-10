@@ -1,3 +1,4 @@
+import { AuditLogEntity } from '../modules/audit/entities/audit-log.entity';
 import { OrderItemEntity } from '../modules/order/entities/order-item.entity';
 import { OrderEntity } from '../modules/order/entities/order.entity';
 import { ProvisionJobEntity } from '../modules/order/entities/provision-job.entity';
@@ -23,6 +24,7 @@ export const PORTAL_ENTITIES = [
   ProvisionJobEntity,
   ProductBillReportEntity,
   ReconciliationEntity,
+  AuditLogEntity,
 ];
 
 export {
@@ -37,4 +39,5 @@ export {
   ProvisionJobEntity,
   ProductBillReportEntity,
   ReconciliationEntity,
+  AuditLogEntity,
 };

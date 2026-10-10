@@ -51,7 +51,7 @@ const { setupSwagger } = require('../dist/config/swagger.setup');
     .setVersion('1.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')
     .addApiKey({ type: 'apiKey', name: 'X-Internal-Key', in: 'header' }, 'internal-key')
-    .addApiKey({ type: 'apiKey', name: 'X-Admin-Key', in: 'header' }, 'admin-key')
+    // 2026-10-10 起管理端改用管理员账号（role=admin 的 JWT），X-Admin-Key 方案已删除
     .addTag('认证 auth', '契约 §1')
     .addTag('钱包 wallet', '契约 §3')
     .addTag('内网计费 internal', '契约 §4（产品 → 门户）')

@@ -74,8 +74,17 @@ export interface JwtConfig {
 }
 
 export interface SecurityConfig {
-  /** 一期管理端静态密钥（契约 §6 允许用 X-Admin-Key） */
-  adminKey: string;
+  /**
+   * 首个管理员的引导配置（环境变量，幂等）。
+   *
+   * 2026-10-10 起管理端改用**管理员账号**鉴权（原静态 `X-Admin-Key` 已废弃：
+   * 它无法区分操作人，审计日志里的"经办人"可被任意伪造）。
+   *
+   * 首个管理员必须由环境变量创建，**不能靠接口**——否则从"服务可访问"到
+   * "首个管理员建好"之间存在时间窗，谁先调到谁就是管理员。
+   * 每次启动都会校准密码，所以改这里重启也是**忘记密码的找回入口**。
+   */
+  adminBootstrap: { username: string; password: string; phone?: string };
   /** 登录/注册限流：窗口秒数与窗口内最大次数 */
   authRateLimit: { windowSeconds: number; max: number };
   /** 密码哈希参数（argon2id） */
@@ -270,7 +279,12 @@ export function loadConfig(): PortalConfig {
       refreshTtlSeconds: int(process.env.JWT_REFRESH_TTL, 1209600),
     },
     security: {
-      adminKey: process.env.ADMIN_KEY ?? '',
+      // 首个管理员：环境变量引导（幂等，每次启动校准密码）
+      adminBootstrap: {
+        username: (process.env.ADMIN_USERNAME ?? '').trim(),
+        password: process.env.ADMIN_PASSWORD ?? '',
+        phone: process.env.ADMIN_PHONE?.trim() || undefined,
+      },
       authRateLimit: {
         windowSeconds: int(process.env.AUTH_RATE_WINDOW, 60),
         max: int(process.env.AUTH_RATE_MAX, 10),

@@ -5,9 +5,12 @@ import { Request, Response } from 'express';
 import { AuthRateLimit } from '../../common/auth-rate-limit';
 import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
 import { Public } from '../../common/public.decorator';
-import { extractBearerToken } from '../../common/request.util';
+import { clientIpOf, extractBearerToken } from '../../common/request.util';
 import { PortalConfigService } from '../../config/portal-config.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+import { AuditService } from '../audit/audit.service';
 import { AuthService, AuthTokens } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwksService } from './jwks.service';
@@ -24,6 +27,7 @@ export class AuthController {
     private readonly jwks: JwksService,
     private readonly config: PortalConfigService,
     private readonly rateLimit: AuthRateLimit,
+    private readonly audit: AuditService,
   ) {}
 
   /** 契约 §1.1 注册：注册即建钱包，注册后自动登录（响应同 1.2 成功结构） */
@@ -139,6 +143,48 @@ export class AuthController {
   ): Promise<{ ok: true }> {
     const accessToken = extractBearerToken(request) ?? undefined;
     const result = await this.auth.logout(user.id, accessToken, expOf(accessToken));
+    response.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    return result;
+  }
+
+  /**
+   * 修改自己的密码（任何登录用户可用，管理员也走这里）。
+   */
+  @ApiOperation({
+    summary: '修改自己的密码',
+    description:
+      '需提供 `old_password` 校验（防止 access token 被盗后直接改密锁死账号）。\n\n' +
+      '新密码 8-64 位且**同时包含字母和数字**。\n\n' +
+      '⚠️ 修改成功后会**吊销该用户全部 refresh 会话**（所有设备强制重新登录），\n' +
+      '包括当前这台 —— 前端收到 `{ ok: true }` 后应引导用户重新登录。\n\n' +
+      '错误：`2003` 当前密码错误 · `1001` 新密码不符合要求 / 新旧密码相同。',
+  })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @Post('password')
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ ok: true; revoked_sessions: number }> {
+    const result = await this.auth.changePassword(
+      { id: user.id, username: user.username, role: user.role },
+      dto.old_password,
+      dto.new_password,
+    );
+
+    // 密码变更一律留痕（审计服务内部已做"失败不抛错"，不影响改密结果）
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.PASSWORD_CHANGE,
+      target: `user:${user.id}`,
+      detail: { role: user.role, revoked_sessions: result.revoked_sessions },
+      ip: clientIpOf(request),
+    });
+
+    // 密码已变，当前设备的 refresh Cookie 也必须清掉
     response.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
     return result;
   }

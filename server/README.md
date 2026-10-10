@@ -13,7 +13,7 @@
 ### 第 1 轮 · 地基 ✅
 工程骨架 · 配置装载 · 9 张表实体 · 建表迁移 · 统一响应与异常过滤 · 探活 `/api/healthz`、`/api/meta` · 本地 compose。
 
-### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 91 项全通过）
+### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 115 项全通过）
 
 | 契约章节 | 接口 | 状态 |
 |---|---|---|
@@ -25,13 +25,14 @@
 | §3.1 | `GET /api/wallet/balance` | ✅ |
 | §3.2 | `GET /api/wallet/transactions`（分页 + type/product_code 过滤） | ✅ |
 | §3.3 | `POST /api/wallet/recharge/apply` | ✅ |
+| 契约外补充 | `GET /api/wallet/recharges` **我的充值记录**（2026-10-10 按前端需求单实现；含 `balance_after` / `reject_reason`，可按 status 筛选） | ✅ |
 | §4.1 | `POST /api/wallet/deduct`（内网 `X-Internal-Key`，幂等返回 3003） | ✅ |
 | §4.2 | `POST /api/wallet/refund`（累计退款校验 3004 / 原单不存在 3005） | ✅ |
 | §6 | `GET /api/admin/recharges`、`POST /api/admin/recharges/:id/confirm`、`GET /api/admin/transactions/export`（CSV） | ✅ |
 | §0.2 / §0.6 | 统一响应壳 + 16 个错误码 | ✅ |
 | 文档 | **OpenAPI / Swagger**：`/api/docs`（UI）+ `/api/docs-json`（导入 Apifox）；另有离线导出 `docs/openapi.json` | ✅ |
 
-### 第 3 轮 · 商城与开通 ✅（端到端 53 项 + 退款路径 19 项全通过）
+### 第 3 轮 · 商城与开通 ✅（端到端 54 项 + 退款路径 20 项全通过）
 
 | 契约章节 | 接口 | 状态 |
 |---|---|---|
@@ -44,8 +45,36 @@
 | §6 | 日对账：产品账单上报 + 逐笔比对（仅产品侧 / 仅门户侧 / 金额不符）+ 手动补跑 | ✅ |
 | 契约外补充 | `GET /api/shop/orders` 我的订单列表、`POST /api/internal/reconciliation/report` 账单上报 | ✅ |
 
+### 第 4 轮 · 管理员账号 + 操作审计 + 管理端运营接口 ✅（管理端 78 项 + 第 2 轮 115 项全通过）
+
+管理端原先用静态 `X-Admin-Key`，**无法区分操作人**——`?admin_id=` 那种"经办人由前端自报"的设计
+让审计完全不可信。本轮改为**管理员账号**：
+
+| 项 | 实现 |
+|---|---|
+| 管理员是什么 | `role='admin'` 的普通用户（**不建新表**），复用同一套登录 / argon2id / JWT / refresh |
+| 首个管理员 | `.env` 的 `ADMIN_USERNAME/ADMIN_PASSWORD` 启动时**幂等创建并校准密码**（也是忘密码的找回入口） |
+| 后续管理员 | `POST /api/admin/admins`（含列表 / 启用禁用 / 重置他人密码） |
+| 鉴权 | JWT 的 `role` claim（签发时写入，每请求零额外查库）；失败仍返回 `1004`，前端处理逻辑不变 |
+| 审计 | `a_audit_log` 表，`operator_id` 一律取自**已验证的 JWT**；覆盖核销/驳回/禁用/调账/改密/导出 |
+| 禁用自己的保护 | 不能禁用自己、不能禁用最后一个可用管理员（否则只能改库救） |
+
+新增管理端接口（对应前端《管理端-缺失接口需求清单》）：
+
+```
+GET  /api/admin/auth/verify              登录态校验（替代"随便调个业务接口看 1004"）
+GET  /api/admin/users                    用户查询（含余额、累计充值/消费；只列普通用户）
+POST /api/admin/users/{id}/status        禁用/恢复（disable+enable 合并）
+GET  /api/admin/transactions             流水列表（含 username + user_balance_cents + 日期区间）
+GET  /api/admin/audit-logs               操作日志
+GET/POST /api/admin/admins*              管理员列表 / 创建 / 启用禁用 / 重置密码
+POST /api/auth/password                  改自己的密码（任何登录用户）
+```
+
+`GET /api/admin/transactions/export` 补上 `start_date` / `end_date` / `limit`（导出是数据外泄面，必须可界定范围）。
+
 ### 尚未实现
-前端（Vue 3，前端团队自建两个仓）· nginx 配置 · `u_user.role` 与真正的管理端角色校验（当前管理端走 `X-Admin-Key` 静态密钥，契约 §6 允许）。
+前端（Vue 3，前端团队自建两个仓）· nginx 配置 · 统计概览 `stats/overview` · 人工调账 `wallets/{uid}/adjust`（第二批）。
 
 ---
 
@@ -66,7 +95,10 @@
 | OpenAPI JSON（在线） | `http://127.0.0.1:3000/api/docs-json` | Apifox / Postman 可直接"导入 URL" |
 | OpenAPI JSON（离线文件） | `docs/openapi.json`（已提交） | 不起后端也能导入；改完接口用 `node scripts/export-openapi.cjs` 重新生成 |
 
-文档里已声明三套鉴权方案：`bearer`（用户端）、`internal-key`（§4 产品 → 门户）、`admin-key`（§6 管理端）。
+文档里已声明**两套**鉴权方案：`bearer`（用户端 + 管理端）、`internal-key`（§4 产品 → 门户）。
+
+> 2026-10-10 起管理端从静态 `X-Admin-Key` 改为**管理员账号**（`role=admin` 的 JWT），
+> `admin-key` 方案已从文档与代码中**删除**——原因见下面「管理端鉴权」一节。
 
 > 注意：`/.well-known/jwks.json` 返回的是**标准 JWKS**，`/api/admin/transactions/export` 返回 **CSV**，这两者不套 `{code,message,data}` 壳，文档里已标注。
 
@@ -93,7 +125,7 @@ npm run migration:run
 # 6) 启动并自验
 npm run start:dev
 curl http://127.0.0.1:3000/api/healthz        # {"code":0,...,"data":{"status":"ok",...}}
-node scripts/e2e-round2.cjs                    # 另开终端，91 项端到端
+node scripts/e2e-round2.cjs                    # 另开终端，115 项端到端
 ```
 
 ## 常用脚本
@@ -103,10 +135,11 @@ node scripts/e2e-round2.cjs                    # 另开终端，91 项端到端
 | `npm run build` / `npm run clean` | 编译到 `dist/`（增量缓存放在 dist 内）；清理 |
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
-| `npm test` | 单元测试（37 项，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**91 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / OpenAPI 文档） |
-| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（53 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
-| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（19 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
+| `npm test` | 单元测试（**63 项**，不需要数据库） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**115 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / 公开接口限流 / OpenAPI 文档） |
+| `node scripts/e2e-admin.cjs` | **管理端端到端（78 项）**：管理员登录与权限边界 / 用户禁用恢复 / 流水与日志 / 管理员 CRUD / 改密码 / 导出留痕 |
+| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（54 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
+| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（20 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
 | `node scripts/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
 | `node scripts/probe-mysql.cjs` | 探测目标 MySQL 版本 / 排序规则 / 已有表 |
@@ -135,6 +168,32 @@ node scripts/e2e-round2.cjs                    # 另开终端，91 项端到端
 8. **门户不直连任何产品数据库**；跨系统只走契约里的 HTTP 接口（内网 + `X-Internal-Key`）。
 9. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund`、`/api/internal/reconciliation/report` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
 10. 密钥、密码、AK **不进仓库**：`.env` 与 `keys/` 已被 `.gitignore` 忽略。
+
+## 管理端鉴权：管理员账号（2026-10-10 起，废弃 `X-Admin-Key`）
+
+**为什么换**：静态密钥**无法区分操作人**。原先 `POST /admin/recharges/:id/confirm?admin_id=` 的
+"经办人"由前端自报、可任意伪造，而核销充值、禁用用户、重置密码都是资金/权限操作，
+出问题必须能追到人。现在管理员就是 `role='admin'` 的普通用户，审计日志的 `operator_id`
+取自**已验证的 JWT**。
+
+| 项 | 规则 |
+|---|---|
+| 首个管理员 | 环境变量 bootstrap（幂等，每次启动校准密码 → 也是忘密码的找回入口）。**不能用接口创建**，否则"部署完到建好管理员"之间有时间窗 |
+| 后续管理员 | `POST /api/admin/admins`；每人数一个账号，**不要共用**（共用则审计退回不可追溯） |
+| 鉴权链 | `JwtAuthGuard` 把 JWT 的 `role` 填进 `request.user` → `AdminGuard` 判断 `role === 'admin'` |
+| ⚠️ 控制器禁止标 `@Public()` | 标了就绕过 JWT，`AdminGuard` 拿不到 `request.user`，连合法管理员也会被拒（早期"路径二"就是这么变成死代码的） |
+| 注册接口 | `role` **写死 `user`**，绝不从请求体读取，否则任何人都能注册出管理员 |
+| 失败码 | 仍为 **`1004`**（授权失败），前端错误处理无需改动 |
+| 自我保护的守卫 | 不能禁用自己；不能禁用**最后一个可用管理员**（否则只能改库救） |
+| 密码变更 | 一律**吊销该用户全部 refresh 会话**（所有设备强制重登）；改自己密码必须提供旧密码 |
+
+**配置（`.env`）**：
+
+```bash
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<强密码，8-64 位且含字母和数字>   # 生产必须换掉，且不与测试环境共用
+ADMIN_PHONE=                                     # 可选
+```
 
 ## 内网鉴权：密钥与产品身份**绑定**（重要不变量）
 

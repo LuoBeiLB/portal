@@ -11,7 +11,8 @@
  * 覆盖：契约 §2.1 / §2.2 / §2.3 / §2.4 / §5.1 / §5.2 / §6 对账
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
-const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
+// 管理端鉴权：2026-10-10 起改为管理员账号（JWT），不再是静态 X-Admin-Key
+const { loginAdmin } = require('./lib/admin-auth.cjs');
 // 走测试桩用的密钥：用 STUB_* 而不是 PRODUCT_STORAGE_INTERNAL_KEY
 // （后者现在是**真实云存储的密钥**，自验不该打到真实环境）
 const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key';
@@ -19,6 +20,8 @@ const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key'
 let passed = 0;
 let failed = 0;
 const failures = [];
+/** 管理员 JWT：管理端接口用它鉴权（2026-10-10 起不再用静态 X-Admin-Key） */
+let adminToken = '';
 
 function check(name, condition, detail) {
   if (condition) {
@@ -75,6 +78,13 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
   let token = '';
   let userId = '';
 
+  // 管理端鉴权前置：2026-10-10 起管理端接口要管理员 JWT（不再是 X-Admin-Key）
+  {
+    const admin = await loginAdmin(BASE);
+    adminToken = admin.token;
+    check('管理员登录成功（对账/开通队列接口需要）', adminToken.length > 20, admin.username);
+  }
+
   // 准备：注册并充值，供后续下单使用
   console.log(`\n=== 准备：注册 + 充值 500 元 ===`);
   {
@@ -92,7 +102,7 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
 
     const confirm = await api(`/api/admin/recharges/${apply.body?.data?.apply_id}/confirm`, {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { reject: false },
     });
     check('核销到账，余额 50000 分', confirm.body?.data?.balance_cents === 50000, confirm.body?.data);
@@ -280,7 +290,7 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
 
     const run = await api('/api/admin/reconciliation/run', {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { biz_date: bizDate, product_code: 'storage' },
     });
     check('手动对账 code=0', run.body.code === 0, run.body);
@@ -299,23 +309,23 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     });
     const run2 = await api('/api/admin/reconciliation/run', {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { biz_date: bizDate, product_code: 'storage' },
     });
     check('同日产品侧金额变化被如实反映（幂等上报覆盖）', run2.body?.data?.product_amount_cents === amount + 1, run2.body?.data?.product_amount_cents);
 
     const todayRun = await api('/api/admin/reconciliation/run', {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { biz_date: today, product_code: 'storage' },
     });
     check('今日对账能跑出差异（历史流水 vs 零上报）', todayRun.body?.data?.status === 'diff', todayRun.body?.data?.status);
 
-    const daily = await api(`/api/admin/reconciliation/daily?date=${bizDate}`, { headers: { 'x-admin-key': ADMIN_KEY } });
+    const daily = await api(`/api/admin/reconciliation/daily?date=${bizDate}`, { headers: { authorization: `Bearer ${adminToken}` } });
     check('日对账查询返回结果（§6 GET daily）', (daily.body?.data?.list ?? []).length >= 1, daily.body?.data);
     check('结果含金额与差异字段', daily.body?.data?.list?.[0]?.portal_amount_cents !== undefined, daily.body?.data?.list?.[0]);
 
-    const jobs = await api('/api/admin/reconciliation/provision-jobs', { headers: { 'x-admin-key': ADMIN_KEY } });
+    const jobs = await api('/api/admin/reconciliation/provision-jobs', { headers: { authorization: `Bearer ${adminToken}` } });
     check('开通任务统计可查（含成功数）', jobs.body.code === 0 && Number(jobs.body?.data?.stats?.['2'] ?? 0) >= 1, jobs.body?.data);
   }
 

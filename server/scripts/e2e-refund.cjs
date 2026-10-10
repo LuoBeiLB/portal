@@ -12,11 +12,14 @@
  *          → 流水里出现 type=3 退款且 refund_of_bill_no 指向原扣费单
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
-const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
+// 管理端鉴权：2026-10-10 起改为管理员账号（JWT），不再是静态 X-Admin-Key
+const { loginAdmin } = require('./lib/admin-auth.cjs');
 
 let passed = 0;
 let failed = 0;
 const failures = [];
+/** 管理员 JWT：管理端接口用它鉴权（2026-10-10 起不再用静态 X-Admin-Key） */
+let adminToken = '';
 
 function check(name, condition, detail) {
   if (condition) {
@@ -68,6 +71,13 @@ async function waitItemSettled(token, orderId, timeoutMs = 40000) {
   const username = `e2eref_${stamp}`;
   const password = 'Ab12345678';
 
+  // 管理端鉴权前置：核销充值需要管理员 JWT（2026-10-10 起不再是 X-Admin-Key）
+  {
+    const admin = await loginAdmin(BASE);
+    adminToken = admin.token;
+    check('管理员登录成功（核销充值需要）', adminToken.length > 20, admin.username);
+  }
+
   console.log(`\n=== 准备：注册 + 充值 100 元 ===`);
   let token = '';
   {
@@ -82,7 +92,7 @@ async function waitItemSettled(token, orderId, timeoutMs = 40000) {
     });
     await api(`/api/admin/recharges/${apply.body?.data?.apply_id}/confirm`, {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { reject: false },
     });
     const balance = await api('/api/wallet/balance', { token });

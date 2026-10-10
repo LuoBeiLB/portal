@@ -11,7 +11,8 @@
  * 注意：脚本会创建测试用户并产生真实流水（金额很小），仅用于本地自验库。
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
-const ADMIN_KEY = process.env.ADMIN_KEY || 'local-dev-admin-key';
+// 管理端鉴权：2026-10-10 起改为管理员账号（JWT），不再是静态 X-Admin-Key
+const { loginAdmin, clearRateLimitKeys } = require('./lib/admin-auth.cjs');
 // 走测试桩用的密钥：用 STUB_* 而不是 PRODUCT_STORAGE_INTERNAL_KEY
 // （后者现在是**真实云存储的密钥**，自验不该打到真实环境）
 const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key';
@@ -19,6 +20,8 @@ const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key'
 let passed = 0;
 let failed = 0;
 const failures = [];
+/** 管理员 JWT：管理端接口用它鉴权（2026-10-10 起不再用静态 X-Admin-Key） */
+let adminToken = '';
 
 function check(name, condition, detail) {
   if (condition) {
@@ -64,7 +67,19 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
   let refreshCookie = '';
   let billNo = `e2e-bill-${stamp}`;
 
-  console.log(`\n=== 0. 探活（§0.2 响应结构）===`);
+  console.log(`\n=== 0. 管理员登录（管理端鉴权前置）===`);
+  {
+    const admin = await loginAdmin(BASE);
+    adminToken = admin.token;
+    check('管理员登录成功（管理端接口需要 JWT）', typeof adminToken === 'string' && adminToken.length > 20, admin.username);
+
+    // 上一轮验证限流时会把配额打满，Redis 里的计数有 60s TTL 且**跨 run 有效**，
+    // 不清掉会让本轮的"公开访问"断言被误判为失败
+    const cleared = clearRateLimitKeys();
+    check('已清理上一轮残留的限流计数（保证可重复运行）', true, `清理 ${cleared} 个键`);
+  }
+
+  console.log(`\n=== 0.1 探活（§0.2 响应结构）===`);
   {
     const res = await api('/api/healthz');
     check('GET /api/healthz 无需 token 即可访问（code=0）', res.body.code === 0, res.body);
@@ -263,15 +278,18 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('金额低于 100 分 -> 1001', tooSmall.body.code === 1001, tooSmall.body);
 
     const noAdminKey = await api('/api/admin/recharges?status=0');
-    check('管理端无 X-Admin-Key -> 1004', noAdminKey.body.code === 1004, noAdminKey.body);
+    check('管理端无 token -> 1002（未登录）', noAdminKey.body.code === 1002, noAdminKey.body);
 
-    const queue = await api('/api/admin/recharges?status=0', { headers: { 'x-admin-key': ADMIN_KEY } });
+    const asUser = await api('/api/admin/recharges?status=0', { token: accessToken });
+    check('普通用户访问管理端 -> 1004（非管理员）', asUser.body.code === 1004, asUser.body);
+
+    const queue = await api('/api/admin/recharges?status=0', { headers: { authorization: `Bearer ${adminToken}` } });
     check('核销队列 code=0（§6 GET /admin/recharges）', queue.body.code === 0, queue.body);
     check('队列中含本条申请（带 username）', queue.body?.data?.list?.some((r) => r.apply_id === applyId && r.username === username), queue.body?.data?.list?.slice(0, 3));
 
     const confirm = await api(`/api/admin/recharges/${applyId}/confirm`, {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { reject: false },
     });
     check('核销到账 code=0', confirm.body.code === 0, confirm.body);
@@ -279,7 +297,7 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
 
     const second = await api(`/api/admin/recharges/${applyId}/confirm`, {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { reject: false },
     });
     check('重复核销被拒（条件更新防重复增额）', second.body.code !== 0, second.body);
@@ -367,9 +385,80 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('退款流水带 refund_of_bill_no 指向原单', refundRow?.refund_of_bill_no === billNo, refundRow);
   }
 
+  console.log(`\n=== 10.1 我的充值记录（用户端，前端需求单）===`);
+  {
+    // 刻意放在第 10 段之后：本段会新增两笔充值申请，
+    // 而第 10 段有严格断言 `total = 3（充值 + 扣费 + 退款）`，插在前面会造成假失败。
+    // 再造两笔不同状态的：驳回 与 待核销，配合第 7 段的"已到账"凑齐三种状态
+    const toReject = await api('/api/wallet/recharge/apply', {
+      method: 'POST',
+      token: accessToken,
+      body: { amount_cents: 5000, remark: 'e2e 会被驳回的那笔' },
+    });
+    await api(`/api/admin/recharges/${toReject.body?.data?.apply_id}/confirm`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+      body: { reject: true, reason: '转账凭证不清晰' },
+    });
+    const toPending = await api('/api/wallet/recharge/apply', {
+      method: 'POST',
+      token: accessToken,
+      body: { amount_cents: 20000, remark: 'e2e 待核销的那笔' },
+    });
+    check('造好三种状态的充值单', toReject.body.code === 0 && toPending.body.code === 0, null);
+
+    const list = await api('/api/wallet/recharges?page=1&size=10', { token: accessToken });
+    check('GET /api/wallet/recharges code=0', list.body.code === 0, list.body);
+    check(
+      '返回分页结构 list/total/page/size',
+      ['list', 'total', 'page', 'size'].every((k) => k in (list.body?.data ?? {})),
+      Object.keys(list.body?.data ?? {}),
+    );
+
+    const rows = list.body?.data?.list ?? [];
+    const credited = rows.find((r) => r.status === 1);
+    const rejected = rows.find((r) => r.status === 2);
+    const pendingRow = rows.find((r) => r.status === 0);
+
+    check('三种状态的记录都在列表里', Boolean(credited && rejected && pendingRow), rows.map((r) => r.status));
+
+    // balance_after：仅已到账非空（取自核销时写的流水）
+    check('**已到账的 balance_after = 到账后余额**', credited?.balance_after === 10000, credited);
+    check('待核销的 balance_after 为 null', pendingRow?.balance_after === null, pendingRow);
+    check('驳回的 balance_after 为 null', rejected?.balance_after === null, rejected);
+
+    // reject_reason：仅驳回非空
+    check('**驳回的 reject_reason 有值**', rejected?.reject_reason === '转账凭证不清晰', rejected);
+    check('已到账的 reject_reason 为 null', credited?.reject_reason === null, credited);
+
+    // remark 回显（用户能看到自己填的转账备注）
+    check('remark 原样回显', pendingRow?.remark === 'e2e 待核销的那笔', pendingRow);
+
+    // 用户端不返回管理端的核对字段
+    check('**不返回 username / phone**（用户不需要看自己的）', !('username' in (credited ?? {})) && !('phone' in (credited ?? {})), Object.keys(credited ?? {}));
+
+    // 只看自己的：换个用户查，不应该看到上面这些单
+    const other = await api('/api/auth/register', {
+      method: 'POST',
+      body: { username: `e2e_rc_${stamp}`, password: 'Ab12345678' },
+    });
+    const otherList = await api('/api/wallet/recharges', { token: other.body?.data?.access_token });
+    check('**只返回当前用户自己的记录**（新用户看到 0 条）', otherList.body?.data?.total === 0, otherList.body?.data?.total);
+
+    // 状态筛选
+    const onlyCredited = await api('/api/wallet/recharges?status=1', { token: accessToken });
+    check('status=1 筛选只剩已到账', (onlyCredited.body?.data?.list ?? []).every((r) => r.status === 1), (onlyCredited.body?.data?.list ?? []).map((r) => r.status));
+
+    const badStatus = await api('/api/wallet/recharges?status=9', { token: accessToken });
+    check('status=9 -> 1001', badStatus.body.code === 1001, badStatus.body);
+
+    const noToken = await api('/api/wallet/recharges');
+    check('无 token -> 1002', noToken.body.code === 1002, noToken.body);
+  }
+
   console.log(`\n=== 11. 管理端流水导出（§6 CSV）===`);
   {
-    const res = await fetch(`${BASE}/api/admin/transactions/export`, { headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = await fetch(`${BASE}/api/admin/transactions/export`, { headers: { authorization: `Bearer ${adminToken}` } });
     const text = await res.text();
     check('导出 HTTP 200', res.status === 200, res.status);
     check('Content-Type 为 CSV', /text\/csv/.test(res.headers.get('content-type') ?? ''), res.headers.get('content-type'));
@@ -380,38 +469,24 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     );
   }
 
-  console.log(`\n=== 6.3 商品列表：公开 + 限流（公开接口的必要配套）===`);
+  console.log(`\n=== 6.3 商品列表：公开访问（公开接口）===`);
   {
     // 契约 §2.1 标的是 Bearer，但 2026-10-09 起改为**公开**：
     // 游客应当能先看价目表；该接口只读、无用户维度。
+    // ⚠️ 限流断言刻意放在**文件最后**（第 15 段）：打满配额会让后续所有商品请求被拒。
     const noToken = await api('/api/shop/products');
     check('**商品列表无 token 也能访问**（公开接口）', noToken.body.code === 0, noToken.body);
-    check('返回 list 结构且带 product_code/sku_id', Array.isArray(noToken.body?.data?.list) && (noToken.body.data.list.length === 0 || ('sku_id' in noToken.body.data.list[0] && 'product_code' in noToken.body.data.list[0])), noToken.body?.data?.list?.[0]);
+    check(
+      '返回 list 结构且带 product_code/sku_id',
+      Array.isArray(noToken.body?.data?.list) &&
+        (noToken.body.data.list.length === 0 ||
+          ('sku_id' in noToken.body.data.list[0] && 'product_code' in noToken.body.data.list[0])),
+      noToken.body?.data?.list?.[0],
+    );
 
     // 带 token 也必须照常可用（前端已按带 token 实现，不能因为公开就挂）
     const withToken = await api('/api/shop/products', { token: accessToken });
     check('带 token 访问同样正常（向后兼容）', withToken.body.code === 0, withToken.body);
-
-    // 限流：e2e 脚本把 PUBLIC_RATE_MAX 调成 5，连打必然触发
-    const max = Number(process.env.PUBLIC_RATE_MAX || 5);
-    let limited = null;
-    for (let i = 0; i < max + 3; i += 1) {
-      const res = await api('/api/shop/products');
-      if (res.body.code === 1001) {
-        limited = res.body;
-        break;
-      }
-    }
-    check(
-      `公开接口被限流（连打 > ${max} 次触发 1001）`,
-      limited !== null,
-      limited ?? '未触发，检查 PUBLIC_RATE_MAX 是否被注入',
-    );
-    check(
-      '限流响应带 data.retry_after（前端可提示稍后再试）',
-      typeof limited?.data?.retry_after === 'number',
-      limited?.data,
-    );
   }
 
   // 放在最后：本段会额外产生充值与扣费流水，避免污染前面「流水条数」类断言
@@ -424,7 +499,7 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     });
     await api(`/api/admin/recharges/${apply.body?.data?.apply_id}/confirm`, {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: { authorization: `Bearer ${adminToken}` },
       body: { reject: false },
     });
 
@@ -532,8 +607,33 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
       !Object.keys(doc.body?.components?.schemas?.OrderItemInputDto?.properties ?? {}).some((k) => k.includes('price')),
       Object.keys(doc.body?.components?.schemas?.OrderItemInputDto?.properties ?? {}),
     );
-    check('声明了 Bearer 与 X-Internal-Key / X-Admin-Key 鉴权方案', Boolean(doc.body?.components?.securitySchemes?.bearer), Object.keys(doc.body?.components?.securitySchemes ?? {}));
+    check('声明了 Bearer 与 X-Internal-Key 鉴权方案', Boolean(doc.body?.components?.securitySchemes?.bearer) && Boolean(doc.body?.components?.securitySchemes?.['internal-key']), Object.keys(doc.body?.components?.securitySchemes ?? {}));
+    check('管理端接口标注 bearer（2026-10-10 起改用管理员账号，不再有 admin-key 方案）', doc.body?.paths?.['/api/admin/recharges']?.get?.security?.some((s) => s.bearer), doc.body?.paths?.['/api/admin/recharges']?.get?.security);
     check('DTO 字段有 schema 描述（不是空对象）', Boolean(doc.body?.components?.schemas?.RegisterDto?.properties?.username), Object.keys(doc.body?.components?.schemas ?? {}).slice(0, 8));
+  }
+
+  // 必须放在最后：打满限流后，同一 IP 的商品列表请求会被拒 1001
+  console.log(`\n=== 15. 公开接口限流（商品列表）===`);
+  {
+    const max = Number(process.env.PUBLIC_RATE_MAX || 5);
+    let limited = null;
+    for (let i = 0; i < max + 3; i += 1) {
+      const res = await api('/api/shop/products');
+      if (res.body.code === 1001) {
+        limited = res.body;
+        break;
+      }
+    }
+    check(
+      `公开接口被限流（连打 > ${max} 次触发 1001）`,
+      limited !== null,
+      limited ?? '未触发，检查 PUBLIC_RATE_MAX 是否被注入（run-e2e-round3.ps1 会注入 5）',
+    );
+    check(
+      '限流响应带 data.retry_after（前端可提示稍后再试）',
+      typeof limited?.data?.retry_after === 'number',
+      limited?.data,
+    );
   }
 
   console.log(`\n${'='.repeat(60)}`);

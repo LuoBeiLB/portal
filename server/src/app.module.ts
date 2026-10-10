@@ -16,6 +16,8 @@ import { buildMysqlOptions } from './config/database.options';
 import { PortalConfigService } from './config/portal-config.service';
 import { TokenModule } from './config/token.module';
 import { PORTAL_ENTITIES } from './database/entities';
+import { AdminModule } from './modules/admin/admin.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InternalModule } from './modules/internal/internal.module';
 import { OrderModule } from './modules/order/order.module';
@@ -30,6 +32,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
  * - round 1：配置 + MySQL + 探活
  * - round 2：Redis + JWT 签发 + 认证（§1）+ 钱包（§3/§6）+ 内网计费（§4）
  * - round 3：商品目录同步（§5.1）+ 商城与订单（§2）+ 开通 worker（§5.2）+ 对账（§6）
+ * - round 4：管理员账号体系 + 操作审计 + 管理端运营接口
  */
 @Module({
   imports: [
@@ -57,6 +60,10 @@ import { WalletModule } from './modules/wallet/wallet.module';
       }),
     }),
     AuthModule,
+    // 审计为全局模块：认证（改密码）、钱包（核销/导出）、对账、管理端都要写日志
+    AuditModule,
+    // 管理端：管理员账号体系（role=admin）+ 运营接口
+    AdminModule,
     WalletModule,
     InternalModule,
     ProductModule,
@@ -69,7 +76,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     RedisStore,
     // 全局鉴权：未标 @Public() 的接口一律要求门户 JWT（契约 §0.3）
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    // 管理端路由按需 @UseGuards(AdminGuard)
+    // 管理端路由用 @UseGuards(AdminGuard)，校验 JWT 里的 role=admin
     AdminGuard,
   ],
   exports: [AdminGuard],

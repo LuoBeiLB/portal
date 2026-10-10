@@ -3,11 +3,12 @@
  *
  * 用法（在 portal/server 目录下）：
  *   node scripts/verify-api.cjs                                  # 验本地 127.0.0.1:3000
- *   node scripts/verify-api.cjs http://112.4.135.254:19999       # 验远端
- *   node scripts/verify-api.cjs http://x.x.x.x:3000 <ADMIN_KEY>
+ *   node scripts/verify-api.cjs http://x.x.x.x:3000              # 验远端
+ *   node scripts/verify-api.cjs http://x.x.x.x:3000 admin <密码>  # 指定管理员账号（默认取 .env）
  *
  * 环境变量可覆盖：
- *   ADMIN_KEY      管理端 X-Admin-Key（默认取 .env 的 ADMIN_KEY）
+ *   ADMIN_USERNAME / ADMIN_PASSWORD  管理员账号（2026-10-10 起管理端用账号登录，
+ *                                    不再是 X-Admin-Key；默认取 .env，启动时由环境变量 bootstrap）
  *   INTERNAL_KEY   内网 X-Internal-Key（默认取 .env 的 STUB_PRODUCT_INTERNAL_KEY）
  *                  ⚠️ 若你要验的是**真实云存储**，请显式传 PRODUCT_STORAGE_INTERNAL_KEY 的值：
  *                     INTERNAL_KEY=<真实密钥> node scripts/verify-api.cjs <地址>
@@ -21,8 +22,8 @@ const { resolve } = require('node:path');
 if (existsSync(resolve(process.cwd(), '.env'))) process.loadEnvFile(resolve(process.cwd(), '.env'));
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:3000').replace(/\/+$/, '');
-const ADMIN_KEY = process.argv[3] || process.env.ADMIN_KEY || '';
 const INTERNAL_KEY = process.env.INTERNAL_KEY || process.env.STUB_PRODUCT_INTERNAL_KEY || '';
+const { loginAdmin, ADMIN_USERNAME: adminUser } = require('./lib/admin-auth.cjs');
 
 let pass = 0;
 let fail = 0;
@@ -123,36 +124,65 @@ function record(label, result, expectation, note) {
   record('POST /api/wallet/recharge/apply（99 分，低于下限）', badAmount, 1001, '应返回 1001');
 
   // ---------- 4. 管理端 ----------
-  if (ADMIN_KEY) {
-    console.log('── 4. 管理端（X-Admin-Key） ──');
-    const adminNoKey = await call('GET', '/api/admin/recharges');
-    record('GET  /api/admin/recharges（不带 key）', adminNoKey, 1004, '应返回 1004');
+  {
+    console.log('── 4. 管理端（管理员账号，Bearer JWT） ──');
 
-    const admin = await call('GET', '/api/admin/recharges?page=1&size=5', { headers: { 'x-admin-key': ADMIN_KEY } });
-    record('GET  /api/admin/recharges（带 key）', admin, 0, `total=${admin.data?.total}`);
+    const adminNoToken = await call('GET', '/api/admin/recharges');
+    record('GET  /api/admin/recharges（未登录）', adminNoToken, 1002, '应返回 1002');
 
-    const confirm = await call('POST', `/api/admin/recharges/${applyId}/confirm`, {
-      headers: { 'x-admin-key': ADMIN_KEY },
-      body: { reject: false },
-    });
-    record('POST /api/admin/recharges/{id}/confirm（核销到账）', confirm, 0, `balance_cents=${confirm.data?.balance_cents}`);
+    const adminAsUser = await call('GET', '/api/admin/recharges', { token });
+    record('GET  /api/admin/recharges（普通用户）', adminAsUser, 1004, '应返回 1004');
 
-    const confirmAgain = await call('POST', `/api/admin/recharges/${applyId}/confirm`, {
-      headers: { 'x-admin-key': ADMIN_KEY },
-      body: { reject: false },
-    });
-    record('POST /api/admin/recharges/{id}/confirm（重复核销）', confirmAgain, 1001, '应返回 1001');
+    let adminToken = '';
+    try {
+      adminToken = (await loginAdmin(BASE)).token;
+      record('POST /api/auth/login（管理员登录）', { http: 200, code: 0 }, 0, `账号 ${adminUser}`);
+    } catch (error) {
+      record('管理员登录', { http: 0, code: -1, text: String(error.message) }, 0, '检查 .env 的 ADMIN_USERNAME / ADMIN_PASSWORD');
+    }
 
-    const daily = await call('GET', '/api/admin/reconciliation/daily', { headers: { 'x-admin-key': ADMIN_KEY } });
-    record('GET  /api/admin/reconciliation/daily', daily, 0, '');
+    if (adminToken) {
+      const auth = { authorization: `Bearer ${adminToken}` };
 
-    const jobs = await call('GET', '/api/admin/reconciliation/provision-jobs', { headers: { 'x-admin-key': ADMIN_KEY } });
-    record('GET  /api/admin/reconciliation/provision-jobs', jobs, 0, `stats=${JSON.stringify(jobs.data?.stats)}`);
+      const verify = await call('GET', '/api/admin/auth/verify', { headers: auth });
+      record('GET  /api/admin/auth/verify', verify, 0, `operator=${verify.data?.operator} role=${verify.data?.role}`);
 
-    const csv = await call('GET', '/api/admin/transactions/export', { headers: { 'x-admin-key': ADMIN_KEY }, raw: true });
-    record('GET  /api/admin/transactions/export（裸 CSV）', csv, (r) => r.http === 200 && !r.text.includes('"code"'), 'CSV，不套壳');
-  } else {
-    console.log('── 4. 管理端：跳过（未提供 ADMIN_KEY，可用第二个参数或环境变量传入）──');
+      const admin = await call('GET', '/api/admin/recharges?page=1&size=5', { headers: auth });
+      record('GET  /api/admin/recharges', admin, 0, `total=${admin.data?.total}`);
+
+      const confirm = await call('POST', `/api/admin/recharges/${applyId}/confirm`, {
+        headers: auth,
+        body: { reject: false },
+      });
+      record('POST /api/admin/recharges/{id}/confirm（核销到账）', confirm, 0, `balance_cents=${confirm.data?.balance_cents}`);
+
+      const confirmAgain = await call('POST', `/api/admin/recharges/${applyId}/confirm`, {
+        headers: auth,
+        body: { reject: false },
+      });
+      record('POST /api/admin/recharges/{id}/confirm（重复核销）', confirmAgain, 1001, '应返回 1001');
+
+      const users = await call('GET', '/api/admin/users?page=1&size=5', { headers: auth });
+      record('GET  /api/admin/users', users, 0, `total=${users.data?.total}`);
+
+      const txns = await call('GET', '/api/admin/transactions?page=1&size=5', { headers: auth });
+      record('GET  /api/admin/transactions', txns, 0, `total=${txns.data?.total}`);
+
+      const logs = await call('GET', '/api/admin/audit-logs?page=1&size=5', { headers: auth });
+      record('GET  /api/admin/audit-logs', logs, 0, `total=${logs.data?.total}`);
+
+      const admins = await call('GET', '/api/admin/admins', { headers: auth });
+      record('GET  /api/admin/admins', admins, 0, `total=${admins.data?.total}`);
+
+      const daily = await call('GET', '/api/admin/reconciliation/daily', { headers: auth });
+      record('GET  /api/admin/reconciliation/daily', daily, 0, '');
+
+      const jobs = await call('GET', '/api/admin/reconciliation/provision-jobs', { headers: auth });
+      record('GET  /api/admin/reconciliation/provision-jobs', jobs, 0, `stats=${JSON.stringify(jobs.data?.stats)}`);
+
+      const csv = await call('GET', '/api/admin/transactions/export', { headers: auth, raw: true });
+      record('GET  /api/admin/transactions/export（裸 CSV）', csv, (r) => r.http === 200 && !r.text.includes('"code"'), 'CSV，不套壳');
+    }
   }
 
   // ---------- 5. 商城 ----------
