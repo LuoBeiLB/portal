@@ -85,6 +85,11 @@ export interface SecurityConfig {
 export interface ShopConfig {
   /** 商品目录同步间隔（毫秒），契约要求 10 分钟级 */
   productSyncIntervalMs: number;
+  /** 商品目录查询缓存 TTL（毫秒），0 = 关闭；同步成功会主动失效 */
+  productListCacheTtlMs: number;
+  /** 公开接口限流（按客户端 IP）：窗口秒数与窗口内上限 */
+  publicRateWindowSeconds: number;
+  publicRateMax: number;
   /** 单订单最多项数 / 单项最大数量 / 云手机单笔上限 */
   maxItemsPerOrder: number;
   maxQuantityPerItem: number;
@@ -278,6 +283,19 @@ export function loadConfig(): PortalConfig {
     },
     shop: {
       productSyncIntervalMs: int(process.env.PRODUCT_SYNC_INTERVAL_MS, 10 * 60 * 1000),
+      /**
+       * 商品目录缓存 TTL（毫秒）。
+       *
+       * 商品**每 10 分钟**才同步一次，同一份响应在周期内 100% 相同，而 `GET /shop/products`
+       * 是公开接口（游客可见），不打缓存则每次请求都查一遍 `p_product`。
+       * 10 秒 TTL 把库压力降到接近 0，用户完全感知不到（远小于同步周期）；
+       * 同步成功后 `ProductSyncService` 会主动清缓存，不必等 TTL 过期。0 = 关闭缓存。
+       */
+      productListCacheTtlMs: int(process.env.PRODUCT_LIST_CACHE_TTL_MS, 10_000),
+      /** 公开接口限流：窗口秒数（按客户端 IP 计数） */
+      publicRateWindowSeconds: int(process.env.PUBLIC_RATE_WINDOW, 60),
+      /** 公开接口限流：窗口内最大请求数。0 = 不限流（仅排障用，不建议生产） */
+      publicRateMax: int(process.env.PUBLIC_RATE_MAX, 120),
       maxItemsPerOrder: int(process.env.MAX_ITEMS_PER_ORDER, 10),
       maxQuantityPerItem: int(process.env.MAX_QUANTITY_PER_ITEM, 10),
       phoneMaxQuantity: int(process.env.PHONE_MAX_QUANTITY, 3),

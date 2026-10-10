@@ -555,8 +555,8 @@
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
-        "summary": "商品列表（契约 §2.1）",
-        "description": "返回 `{ list: [...] }`，不分页。只返回**在售**商品。\n\n`spec` 是**产品自定义结构**，门户原样透传，前端要按 key 通用渲染，别假设一定有某个字段。\n\n`stock` 为 `null` 表示不限或产品未上报，**前端显示「现货」而不是「0 件」**。\n\n`billing_mode`：1 包周期（下单即扣）、2 按量（购买时 0 元，后付费由产品出账）。\n\n⚠️ 这里显示的是缓存价，**下单以后端重算为准**。",
+        "summary": "商品列表（契约 §2.1）· 公开，无需登录",
+        "description": "返回 `{ list: [...] }`，不分页。只返回**在售**商品。**无需 token**。\n\n`spec` 是**产品自定义结构**，门户原样透传，前端要按 key 通用渲染，别假设一定有某个字段。\n\n`stock` 为 `null` 表示不限或产品未上报，**前端显示「现货」而不是「0 件」**。\n\n`billing_mode`：1 包周期（下单即扣）、2 按量（购买时 0 元，后付费由产品出账）。\n\n⚠️ 这里显示的是缓存价，**下单以后端重算为准**。\n\n⚠️ 按 IP 限流；超限返回 `1001` 且 `data.retry_after` 给出需等待秒数。",
         "parameters": [
           {
             "name": "product_code",
@@ -581,11 +581,6 @@
         },
         "tags": [
           "商城 shop"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
         ]
       }
     },
@@ -810,7 +805,7 @@
       "post": {
         "operationId": "InternalReconciliationController_report",
         "summary": "产品账单上报（契约外补充，对账前置）",
-        "description": "产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。",
+        "description": "产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n**`product_code` 以 `X-Internal-Key` 的归属为准**：传了必须一致（否则 1004），不传则按密钥推定。\n\n需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1016,7 +1011,7 @@
           },
           "product_code": {
             "type": "string",
-            "description": "本产品代码",
+            "description": "本产品代码。**可选**：不传则按 X-Internal-Key 的归属推定；传了必须与密钥归属一致，否则 1004",
             "enum": [
               "storage",
               "phone",
@@ -1047,7 +1042,6 @@
         },
         "required": [
           "portal_user_id",
-          "product_code",
           "bill_no",
           "amount_cents"
         ]

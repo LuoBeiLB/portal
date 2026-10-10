@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthRateLimit } from '../../common/auth-rate-limit';
-import { RateLimiterService } from '../../common/rate-limiter.service';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { AuthController } from './auth.controller';
@@ -19,7 +18,8 @@ import { TokenService } from './token.service';
 @Module({
   imports: [TypeOrmModule.forFeature([UserEntity, WalletEntity])],
   controllers: [AuthController, JwksController],
-  providers: [AuthService, PasswordService, TokenService, JwksService, RateLimiterService, AuthRateLimit],
+  // RateLimiterService 由全局 RateLimiterModule 提供（公开接口也要限流）
+  providers: [AuthService, PasswordService, TokenService, JwksService, AuthRateLimit],
   exports: [AuthService, TokenService, PasswordService],
 })
 export class AuthModule {}

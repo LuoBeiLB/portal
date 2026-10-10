@@ -54,6 +54,9 @@ try {
     $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
+    # 与 run-e2e-round3.ps1 一致：公开接口限流阈值调小，便于触发
+    $env:PUBLIC_RATE_WINDOW = '60'
+    $env:PUBLIC_RATE_MAX = '5'
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-refund.txt" `
         -RedirectStandardError "$env:TEMP\stub-refund-err.txt" -PassThru -WindowStyle Hidden

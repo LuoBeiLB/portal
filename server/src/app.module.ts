@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
 import { AdminGuard } from './common/admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { JwtAuthGuard } from './common/jwt-auth.guard';
+import { RateLimiterModule } from './common/rate-limiter.service';
 import { RedisModule } from './common/redis.module';
 import { RedisStore } from './common/redis-store.service';
 import { ConfigurationModule } from './config/configuration.module';
@@ -38,6 +39,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
     ScheduleModule.forRoot(),
     ConfigurationModule,
     RedisModule,
+    // 限流服务做成全局：登录/注册与**公开接口**（商品列表）都要用
+    RateLimiterModule,
     TokenModule,
     TypeOrmModule.forRootAsync({
       inject: [PortalConfigService],

@@ -44,6 +44,9 @@ export interface ProductView {
 export class ProductSyncService {
   private readonly logger = new Logger(ProductSyncService.name);
 
+  /** 商品列表进程内缓存：key = product_code（未过滤时为 '*'） */
+  private readonly listCache = new Map<string, { value: { list: ProductView[] }; expiresAt: number }>();
+
   constructor(
     @InjectRepository(ProductEntity) private readonly products: Repository<ProductEntity>,
     @InjectRepository(ProductSyncLogEntity) private readonly logs: Repository<ProductSyncLogEntity>,
@@ -109,6 +112,9 @@ export class ProductSyncService {
       log.status = 0;
       await this.logs.save(log);
 
+      // 商品有变动（含软下架）→ 立刻失效列表缓存，避免调价被缓存挡住
+      this.clearListCache();
+
       return { product_code: productCode, fetched: remote.length, upserted, deactivated, status: 'ok' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -168,13 +174,35 @@ export class ProductSyncService {
     return { upserted: seen.length, deactivated: stale.length };
   }
 
-  /** 契约 §2.1 商品列表（用户端）。product_code 可选过滤；只返回在售商品 */
+  /**
+   * 契约 §2.1 商品列表（**公开接口**，游客可见）。product_code 可选过滤；只返回在售商品。
+   *
+   * 带进程内 TTL 缓存：商品每 10 分钟才同步一次，同一份响应在周期内完全相同，
+   * 而这是公开接口，不打缓存会被无限刷库。TTL 默认 10 秒（远小于同步周期，用户无感知），
+   * 且每次同步成功后会**主动失效**，所以调价不会因为缓存而延迟生效。
+   */
   async listForShop(productCode?: string): Promise<{ list: ProductView[] }> {
+    const ttlMs = this.config.shop.productListCacheTtlMs;
+    const cacheKey = productCode ?? '*';
+
+    if (ttlMs > 0) {
+      const cached = this.listCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
+    }
+
     const rows = await this.products.find({
       where: productCode ? { productCode, isActive: 1 } : { isActive: 1 },
       order: { productCode: 'ASC', priceCents: 'ASC' },
     });
-    return { list: rows.map(toProductView) };
+    const value = { list: rows.map(toProductView) };
+
+    if (ttlMs > 0) this.listCache.set(cacheKey, { value, expiresAt: Date.now() + ttlMs });
+    return value;
+  }
+
+  /** 清空商品列表缓存（同步成功后调用，保证调价立刻可见） */
+  private clearListCache(): void {
+    if (this.listCache.size > 0) this.listCache.clear();
   }
 
   /** 下单/支付前的二次校验：必须存在且在售（契约 §2.2 明确创建时校验，支付时二次校验） */

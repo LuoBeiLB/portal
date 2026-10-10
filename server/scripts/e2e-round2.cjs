@@ -380,6 +380,40 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     );
   }
 
+  console.log(`\n=== 6.3 商品列表：公开 + 限流（公开接口的必要配套）===`);
+  {
+    // 契约 §2.1 标的是 Bearer，但 2026-10-09 起改为**公开**：
+    // 游客应当能先看价目表；该接口只读、无用户维度。
+    const noToken = await api('/api/shop/products');
+    check('**商品列表无 token 也能访问**（公开接口）', noToken.body.code === 0, noToken.body);
+    check('返回 list 结构且带 product_code/sku_id', Array.isArray(noToken.body?.data?.list) && (noToken.body.data.list.length === 0 || ('sku_id' in noToken.body.data.list[0] && 'product_code' in noToken.body.data.list[0])), noToken.body?.data?.list?.[0]);
+
+    // 带 token 也必须照常可用（前端已按带 token 实现，不能因为公开就挂）
+    const withToken = await api('/api/shop/products', { token: accessToken });
+    check('带 token 访问同样正常（向后兼容）', withToken.body.code === 0, withToken.body);
+
+    // 限流：e2e 脚本把 PUBLIC_RATE_MAX 调成 5，连打必然触发
+    const max = Number(process.env.PUBLIC_RATE_MAX || 5);
+    let limited = null;
+    for (let i = 0; i < max + 3; i += 1) {
+      const res = await api('/api/shop/products');
+      if (res.body.code === 1001) {
+        limited = res.body;
+        break;
+      }
+    }
+    check(
+      `公开接口被限流（连打 > ${max} 次触发 1001）`,
+      limited !== null,
+      limited ?? '未触发，检查 PUBLIC_RATE_MAX 是否被注入',
+    );
+    check(
+      '限流响应带 data.retry_after（前端可提示稍后再试）',
+      typeof limited?.data?.retry_after === 'number',
+      limited?.data,
+    );
+  }
+
   // 放在最后：本段会额外产生充值与扣费流水，避免污染前面「流水条数」类断言
   console.log(`\n=== 14. bill_no 全局唯一（跨产品不得撞号）===`);
   {

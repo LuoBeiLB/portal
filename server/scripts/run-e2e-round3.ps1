@@ -62,6 +62,9 @@ try {
     $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
+    # 公开接口限流阈值调小，便于在 e2e 里真的触发 1001（生产默认 120 次/分钟）
+    $env:PUBLIC_RATE_WINDOW = '60'
+    $env:PUBLIC_RATE_MAX = '5'
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-run.txt" `
         -RedirectStandardError "$env:TEMP\stub-run-err.txt" -PassThru -WindowStyle Hidden
