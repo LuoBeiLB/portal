@@ -125,6 +125,21 @@ async function waitItemSettled(token, orderId, timeoutMs = 40000) {
     check('fail_reason 记录了失败原因（4004）', String(settled?.items?.[0]?.fail_reason ?? '').includes('4004'), settled?.items?.[0]?.fail_reason);
     check('订单状态 = 3 全部失败', settled?.status === 3, settled?.status);
 
+    // 退款流水关联（2026-10-10 新增，D 组 D-F3）：
+    // 前端要从订单详情直接跳到"这笔退款在哪"，不必去流水页按金额时间人工翻
+    const item = settled?.items?.[0];
+    check(
+      '**退款项带 refund_bill_no**（形如 refund:{item_id}:{attempt}）',
+      /^refund:\d+:\d+$/.test(String(item?.refund_bill_no ?? '')),
+      item?.refund_bill_no,
+    );
+    check('**退款项带 refunded_at**（到账时间，UTC ISO）', /^\d{4}-\d{2}-\d{2}T/.test(String(item?.refunded_at ?? '')), item?.refunded_at);
+    check(
+      'refund_bill_no 里的 item_id 与本项一致',
+      String(item?.refund_bill_no ?? '').startsWith(`refund:${item?.item_id}:`),
+      { refund_bill_no: item?.refund_bill_no, item_id: item?.item_id },
+    );
+
     const balance = await api('/api/wallet/balance', { token });
     check('钱已退回（余额回到 10000）', balance.body?.data?.balance_cents === 10000, balance.body?.data);
   }

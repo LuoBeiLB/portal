@@ -13,7 +13,7 @@
 ### 第 1 轮 · 地基 ✅
 工程骨架 · 配置装载 · 9 张表实体 · 建表迁移 · 统一响应与异常过滤 · 探活 `/api/healthz`、`/api/meta` · 本地 compose。
 
-### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 115 项全通过）
+### 第 2 轮 · 认证 + 钱包 + 充值核销 ✅（端到端 118 项全通过）
 
 | 契约章节 | 接口 | 状态 |
 |---|---|---|
@@ -32,11 +32,11 @@
 | §0.2 / §0.6 | 统一响应壳 + 16 个错误码 | ✅ |
 | 文档 | **OpenAPI / Swagger**：`/api/docs`（UI）+ `/api/docs-json`（导入 Apifox）；另有离线导出 `docs/openapi.json` | ✅ |
 
-### 第 3 轮 · 商城与开通 ✅（端到端 54 项 + 退款路径 20 项全通过）
+### 第 3 轮 · 商城与开通 ✅（端到端 83 项 + 退款路径 23 项全通过）
 
 | 契约章节 | 接口 | 状态 |
 |---|---|---|
-| §2.1 | `GET /api/shop/products` 商品列表（只返回在售；stock 为 null = 现货） | ✅ |
+| §2.1 | `GET /api/shop/products` 商品列表（只返回在售；stock 为 null = 现货；响应含 `catalog` 新鲜度——同步失败时 `stale=true`，避免静默返回旧价） | ✅ |
 | §2.2 | `POST /api/shop/orders` 创建订单（**逐项校验 + 后端重算价格**） | ✅ |
 | §2.3 | `GET /api/shop/orders/:id` 订单详情（按项返回状态） | ✅ |
 | §2.4 | `POST /api/shop/orders/:id/pay` 支付（**逐项扣费同步 + 开通异步**） | ✅ |
@@ -45,7 +45,7 @@
 | §6 | 日对账：产品账单上报 + 逐笔比对（仅产品侧 / 仅门户侧 / 金额不符）+ 手动补跑 | ✅ |
 | 契约外补充 | `GET /api/shop/orders` 我的订单列表、`POST /api/internal/reconciliation/report` 账单上报 | ✅ |
 
-### 第 4 轮 · 管理员账号 + 操作审计 + 管理端运营接口 ✅（管理端 78 项 + 第 2 轮 115 项全通过）
+### 第 4 轮 · 管理员账号 + 操作审计 + 管理端运营接口 ✅（管理端 78 项 + 第 2 轮 118 项全通过）
 
 管理端原先用静态 `X-Admin-Key`，**无法区分操作人**——`?admin_id=` 那种"经办人由前端自报"的设计
 让审计完全不可信。本轮改为**管理员账号**：
@@ -125,7 +125,7 @@ npm run migration:run
 # 6) 启动并自验
 npm run start:dev
 curl http://127.0.0.1:3000/api/healthz        # {"code":0,...,"data":{"status":"ok",...}}
-node scripts/e2e-round2.cjs                    # 另开终端，115 项端到端
+node scripts/e2e-round2.cjs                    # 另开终端，118 项端到端
 ```
 
 ## 常用脚本
@@ -135,11 +135,13 @@ node scripts/e2e-round2.cjs                    # 另开终端，115 项端到端
 | `npm run build` / `npm run clean` | 编译到 `dist/`（增量缓存放在 dist 内）；清理 |
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
-| `npm test` | 单元测试（**63 项**，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**115 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / 公开接口限流 / OpenAPI 文档） |
+| `npm test` | 单元测试（**68 项**，不需要数据库） |
+| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**118 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / 公开接口限流 / OpenAPI 文档） |
 | `node scripts/e2e-admin.cjs` | **管理端端到端（78 项）**：管理员登录与权限边界 / 用户禁用恢复 / 流水与日志 / 管理员 CRUD / 改密码 / 导出留痕 |
-| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（54 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
-| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（20 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
+| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（83 项）**：自动清端口、起产品桩、重置商品缓存、跑完自动清理 |
+| `node scripts/check-openapi-responses.cjs` | **检查所有接口是否都声明了响应结构**（漏写会失败，防"前端靠猜字段名"） |
+| `node scripts/check-openapi-nullable-types.cjs` | **检查 nullable 字段类型是否标错**（TS 反射会把 `string \| null` 退化成 `object`） |
+| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（23 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
 | `node scripts/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
 | `node scripts/probe-mysql.cjs` | 探测目标 MySQL 版本 / 排序规则 / 已有表 |

@@ -19,7 +19,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为令牌 + 用户信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -45,7 +52,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为令牌 + 用户信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -61,7 +75,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为新的令牌 + 用户信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -77,7 +98,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为 { ok: true }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -103,7 +131,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 含被吊销的会话数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -176,7 +211,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为登录态校验结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminVerifyView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -257,7 +299,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为用户列表 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -297,7 +346,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为变更后状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusChangeView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -425,7 +481,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为流水列表 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTransactionListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -547,7 +610,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为日志列表 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -568,7 +638,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为管理员列表（不分页）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -597,7 +674,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为新建管理员",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCreatedView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -637,7 +721,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为变更后状态与吊销会话数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusChangeView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -677,7 +768,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 含被吊销的会话数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -698,7 +796,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为余额与钱包状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -786,7 +891,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为流水列表 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -817,7 +929,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为申请单号与提示文案",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RechargeApplyResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -889,7 +1008,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为充值记录 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRechargeListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -961,7 +1087,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为核销队列 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRechargeListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1001,7 +1134,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为核销结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RechargeConfirmResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1121,7 +1261,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "**裸 CSV**（不套 {code,message,data} 壳），带 UTF-8 BOM，Content-Type: text/csv",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1152,7 +1299,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为扣费结果与余额",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeductView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1183,7 +1337,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为退款结果与余额",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1220,7 +1381,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为商品列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1246,7 +1414,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为订单详情（含 items）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1261,7 +1436,7 @@
       "get": {
         "operationId": "ShopController_listMine",
         "summary": "我的订单列表（契约外补充）",
-        "description": "按创建时间倒序分页，返回结构与订单详情一致（含 items）。契约原文只有\"订单详情\"，此接口是为前端补齐的。",
+        "description": "按创建时间倒序分页，返回结构与订单详情一致（含 items）。契约原文只有\"订单详情\"，此接口是为前端补齐的。\n\n`status` 可选筛选（`0` 待支付 / `1` 部分成功 / `2` 全部成功 / `3` 全部失败），`total` 为筛选后的数量。\n非法值（如 `999`）返回 **1001**，不会被静默忽略。",
         "parameters": [
           {
             "name": "page",
@@ -1284,11 +1459,34 @@
               "example": 20,
               "type": "number"
             }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "订单状态筛选：0 待支付 / 1 部分成功 / 2 全部成功 / 3 全部失败；不传返回全部",
+            "schema": {
+              "example": 0,
+              "enum": [
+                0,
+                1,
+                2,
+                3
+              ],
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为订单列表 + 分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderListView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1305,7 +1503,7 @@
       "get": {
         "operationId": "ShopController_detail",
         "summary": "订单详情（契约 §2.3）",
-        "description": "订单 status：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败。\n\n订单项 status：`0` 待支付 · `1` 已支付（**开通中**）· `2` 开通成功 · `3` 失败待退款 · `4` 已退款。\n\n成功项带 `instance_id` / `expire_at`；失败项带 `fail_reason`（如 `OUT_OF_STOCK`）。",
+        "description": "订单 status：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败。\n\n订单项 status：`0` 待支付 · `1` 已支付（**开通中**）· `2` 开通成功 · `3` 失败待退款 · `4` 已退款。\n\n成功项带 `instance_id` / `expire_at`；失败项带 `fail_reason`（取值清单见 `OrderItemView.fail_reason`）。\n\n---\n\n**轮询友好（D 组 D-Q6）**：本接口**不做限流**（只有 `GET /shop/products` 按 IP 限流）。\n支付后按 1.5 秒一次、最长 60 秒轮询是安全的。\n\n**轮询停止条件**：没有任何项处于 `status === 1` 或 `0`。\n⚠️ **判定\"是否还在处理\"看订单项，不要看订单 `status`** —— 受理那一刻订单就已经是 `1` 了。\n\n**查不到时一律 `4001`**：别人的订单与不存在的订单返回**同一个码**（不暴露他人订单的存在性），\n前端文案统一写「订单不存在或无权查看」。",
         "parameters": [
           {
             "name": "id",
@@ -1318,7 +1516,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为订单详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1335,7 +1540,7 @@
       "post": {
         "operationId": "ShopController_pay",
         "summary": "支付订单（契约 §2.4）",
-        "description": "**扣费同步完成、开通异步进行**（契约写的是同步循环，本实现把 provision 拆到后台，避免 30s 长请求打满连接池）。\n\n返回里：`accepted_items` = 本次受理项数；`processing_items` > 0 表示**还在开通中，前端应轮询订单详情**。\n\n已受理的项状态是 `1 已支付`，开通完成后会变成 `2 开通成功` 或 `4 已退款`（失败自动退款）。\n\n错误：3001 余额不足（**未处理的项保持 0，充值后可再次点支付**）、4001 订单不存在、4002 订单状态不允许（已全部失败的订单不可再支付）。",
+        "description": "**扣费同步完成、开通异步进行**（契约写的是同步循环，本实现把 provision 拆到后台，避免 30s 长请求打满连接池）。\n\n返回里：`accepted_items` = 本次受理项数；`processing_items` > 0 表示**还在开通中，前端应轮询订单详情**。\n\n已受理的项状态是 `1 已支付`，开通完成后会变成 `2 开通成功` 或 `4 已退款`（失败自动退款）。\n\n---\n\n**重复支付的返回值（2026-10-10 实测，D 组 D-Q1）**：\n- 订单里还有项处于 `1 已支付`（开通中）时再支付 → **`4002`**（不会返回 `code 0`）\n- 订单已到终态（`2` 全部成功 / `3` 全部失败）时再支付 → **`4002`**\n- 订单 `1 部分成功` 但仍有项处于 `0 待支付`（余额不足后续付）→ **正常受理**，只处理待支付项\n\n**并发支付安全（D-Q7）**：订单行加悲观写锁，同一订单并发两次只有一个真正扣费，另一个返回 `4002`。\n响应超时后用**同样的请求重试是安全的**（幂等键 `order:{order_id}:item:{item_id}`）。\n\n**耗时（D-Q9）**：实测 5 个样本 35~60ms（含一次事务提交），远小于前端 15s 超时。\n\n---\n\n错误码：\n- `3001` 余额不足 —— **`data` 为 `null`**，要做「还差 ¥X」需自己再调 `GET /api/wallet/balance`。\n  未处理的项保持 `0`，**充值后可再次点支付**（已扣费的项不会重复扣）\n- `3002` 钱包冻结 —— 与余额不足**要分开提示**：冻结时引导充值没用，应提示联系平台\n- `4001` 订单不存在（**含别人的订单**：不暴露存在性，与\"不存在\"返回同一个码）\n- `4002` 订单状态不允许再支付（见上面的重复支付语义）\n\n**注意**：支付时**不做库存/上架二次校验**（契约 §2.2 提过\"支付时二次校验\"，实现未做）。\n商品在此期间被抢空的话，会在开通阶段失败 → 该项变 `4 已退款` + `fail_reason`，接口本身仍是 `code 0`。",
         "parameters": [
           {
             "name": "id",
@@ -1348,7 +1553,14 @@
         ],
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为订单 + accepted_items/processing_items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayResultView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1380,7 +1592,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为对账结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1411,7 +1630,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为对账结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1432,7 +1658,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为开通任务统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvisionJobsView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1463,7 +1696,14 @@
         },
         "responses": {
           "200": {
-            "description": "契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code"
+            "description": "统一响应壳，data 为接收与落库条数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportBillsView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1484,7 +1724,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为探活结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1500,7 +1747,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "统一响应壳，data 为服务元信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaView"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1585,6 +1839,97 @@
           "password"
         ]
       },
+      "AuthUserView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "用户 UUID",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名",
+            "example": "luobo"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号；未绑定时为空",
+            "example": null,
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "注册时间（UTC ISO 8601）",
+            "example": "2026-09-30T03:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "phone",
+          "created_at"
+        ]
+      },
+      "AuthTokenView": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "访问令牌（RS256，默认 2 小时）。放在 `Authorization: Bearer <token>`",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6InBvcnRhbC0yMDI2LTEwIn0..."
+          },
+          "expires_in": {
+            "type": "number",
+            "description": "access_token 有效期（秒）",
+            "example": 7200
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "刷新令牌。**同时通过 HttpOnly Cookie 下发**，前端通常不需要自己存；跨域时记得 `withCredentials: true`",
+            "example": "a1b2c3d4e5f6..."
+          },
+          "id": {
+            "type": "string",
+            "description": "用户 UUID（顶层）",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名（顶层）",
+            "example": "luobo"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号（顶层）；未绑定时为空",
+            "example": null,
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "注册时间（顶层，UTC ISO 8601）",
+            "example": "2026-09-30T03:00:00Z"
+          },
+          "user": {
+            "description": "登录态用户摘要（与顶层同值，便于新前端统一取值）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthUserView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "refresh_token",
+          "id",
+          "username",
+          "phone",
+          "created_at",
+          "user"
+        ]
+      },
       "LoginDto": {
         "type": "object",
         "properties": {
@@ -1604,6 +1949,19 @@
           "password"
         ]
       },
+      "OkView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定为 true；前端判断 `code === 0` 即可",
+            "example": true
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
       "ChangePasswordDto": {
         "type": "object",
         "properties": {
@@ -1621,6 +1979,155 @@
         "required": [
           "old_password",
           "new_password"
+        ]
+      },
+      "CredentialResultView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定为 true；前端判断 `code === 0` 即可",
+            "example": true
+          },
+          "revoked_sessions": {
+            "type": "number",
+            "description": "本次被吊销的会话数（**改密码/被禁用后所有设备都要重新登录**）",
+            "example": 3
+          }
+        },
+        "required": [
+          "ok",
+          "revoked_sessions"
+        ]
+      },
+      "AdminVerifyView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定为 true；非管理员会返回 `1004` 而不是此结构",
+            "example": true
+          },
+          "operator": {
+            "type": "string",
+            "description": "当前管理员用户名（取自 JWT）",
+            "example": "admin"
+          },
+          "operator_id": {
+            "type": "string",
+            "description": "当前管理员用户 ID（写入审计日志的 operator_id）",
+            "example": "01a123f4-7110-795a-8102-e03731eefd14"
+          },
+          "role": {
+            "type": "string",
+            "description": "固定为 `admin`",
+            "example": "admin"
+          },
+          "server_time": {
+            "type": "string",
+            "description": "服务端当前时间（UTC ISO 8601），前端可据此校准",
+            "example": "2026-10-10T03:10:30Z"
+          }
+        },
+        "required": [
+          "ok",
+          "operator",
+          "operator_id",
+          "role",
+          "server_time"
+        ]
+      },
+      "AdminUserView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "用户 UUID",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名",
+            "example": "luobo"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号；未绑定时为空",
+            "example": "13800000000",
+            "nullable": true
+          },
+          "balance_cents": {
+            "type": "number",
+            "description": "余额，单位：分",
+            "example": 17000
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "created_at": {
+            "type": "string",
+            "description": "注册时间（UTC ISO 8601）",
+            "example": "2026-09-30T03:00:00Z"
+          },
+          "recharge_total_cents": {
+            "type": "number",
+            "description": "累计充值（type=1 流水合计），单位：分",
+            "example": 50000
+          },
+          "consume_total_cents": {
+            "type": "number",
+            "description": "累计消费（type=2 流水合计），单位：分",
+            "example": 33000
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "phone",
+          "balance_cents",
+          "status",
+          "created_at",
+          "recharge_total_cents",
+          "consume_total_cents"
+        ]
+      },
+      "AdminUserListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数（带筛选时为筛选后的数量）",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "用户列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminUserView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
         ]
       },
       "UserStatusDto": {
@@ -1643,6 +2150,333 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "StatusChangeView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定为 true；前端判断 `code === 0` 即可",
+            "example": true
+          },
+          "status": {
+            "type": "number",
+            "description": "变更后的状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 1
+          },
+          "revoked_sessions": {
+            "type": "number",
+            "description": "本次被吊销的会话数。**仅管理员启停接口返回此字段**（禁用会强制下线；启用不恢复登录态）",
+            "example": 2
+          }
+        },
+        "required": [
+          "ok",
+          "status"
+        ]
+      },
+      "AdminTransactionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "流水 ID（**string**）",
+            "example": "9001"
+          },
+          "type": {
+            "type": "number",
+            "description": "类型：`1` 充值 · `2` 扣费 · `3` 退款 · `4` 调账",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "example": 2
+          },
+          "amount_cents": {
+            "type": "number",
+            "description": "金额，单位：分（正数，方向由 type 决定）",
+            "example": 50000
+          },
+          "balance_after": {
+            "type": "number",
+            "description": "本次流水完成后的余额快照，单位：分",
+            "example": 17000
+          },
+          "product_code": {
+            "type": "string",
+            "description": "产品代码；门户内部流水（充值/调账）为空",
+            "example": "storage",
+            "nullable": true
+          },
+          "bill_no": {
+            "type": "string",
+            "description": "幂等键：产品账单号 / 充值单号 / 退款单号",
+            "example": "storage-20261005-000123"
+          },
+          "refund_of_bill_no": {
+            "type": "string",
+            "description": "退款流水指向的原扣费单号；非退款为空",
+            "example": null,
+            "nullable": true
+          },
+          "detail": {
+            "type": "object",
+            "description": "账单明细（产品传入时原样入）。**自由结构**，前端按 key 通用渲染",
+            "additionalProperties": true,
+            "example": {
+              "plan": "续费·标准版"
+            },
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "发生时间（UTC ISO 8601）",
+            "example": "2026-10-05T02:00:00Z"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "所属用户 ID",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "所属用户名（管理端核对用）",
+            "example": "luobo",
+            "nullable": true
+          },
+          "user_balance_cents": {
+            "type": "number",
+            "description": "该用户**当前**余额，单位：分",
+            "example": 17000,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "amount_cents",
+          "balance_after",
+          "product_code",
+          "bill_no",
+          "refund_of_bill_no",
+          "detail",
+          "created_at",
+          "user_id",
+          "username",
+          "user_balance_cents"
+        ]
+      },
+      "AdminTransactionListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "流水列表，按时间倒序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminTransactionView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AuditLogView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "日志 ID（**string**）",
+            "example": "30001"
+          },
+          "operator_id": {
+            "type": "string",
+            "description": "操作人用户 ID（**取自已验证的 JWT，不可伪造**）",
+            "example": "01a123f4-7110-795a-8102-e03731eefd14"
+          },
+          "operator": {
+            "type": "string",
+            "description": "操作人用户名；系统动作为 `system`",
+            "example": "admin"
+          },
+          "action": {
+            "type": "string",
+            "description": "操作类型（枚举见接口描述）",
+            "enum": [
+              "recharge_confirm",
+              "recharge_reject",
+              "user_disable",
+              "user_enable",
+              "admin_create",
+              "admin_disable",
+              "admin_enable",
+              "admin_password_reset",
+              "password_change",
+              "transaction_export",
+              "reconciliation_run",
+              "wallet_adjust",
+              "system_bootstrap"
+            ],
+            "example": "recharge_confirm"
+          },
+          "target": {
+            "type": "string",
+            "description": "操作对象，形如 `apply:27` / `user:01a1...`",
+            "example": "apply:27",
+            "nullable": true
+          },
+          "detail": {
+            "type": "object",
+            "description": "可读明细（随操作类型不同）。**自由结构**，前端按 key 通用渲染",
+            "additionalProperties": true,
+            "example": {
+              "reject": false,
+              "amount_cents": 30000
+            },
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "description": "操作来源 IP（IPv6 最长 45 字符）",
+            "example": "192.168.9.103",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "发生时间（UTC ISO 8601）",
+            "example": "2026-10-09T10:05:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "operator_id",
+          "operator",
+          "action",
+          "target",
+          "detail",
+          "ip",
+          "created_at"
+        ]
+      },
+      "AuditLogListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数（带筛选时为筛选后的数量）",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "日志列表，按时间倒序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditLogView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AdminAccountView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "管理员用户 ID",
+            "example": "01a123f4-7110-795a-8102-e03731eefd14"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名（登录名）",
+            "example": "admin"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号；未绑定时为空",
+            "example": null,
+            "nullable": true
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-10T02:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "phone",
+          "status",
+          "created_at"
+        ]
+      },
+      "AdminAccountListView": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "管理员列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminAccountView"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "管理员总数（含已禁用）",
+            "example": 2
+          }
+        },
+        "required": [
+          "list",
+          "total"
         ]
       },
       "CreateAdminDto": {
@@ -1669,6 +2503,25 @@
           "password"
         ]
       },
+      "AdminCreatedView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "新建管理员的用户 ID",
+            "example": "01a123fc-c68a-762c-ac55-de911541ab67"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名",
+            "example": "ops_luobo"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ]
+      },
       "ResetPasswordDto": {
         "type": "object",
         "properties": {
@@ -1680,6 +2533,141 @@
         },
         "required": [
           "new_password"
+        ]
+      },
+      "BalanceView": {
+        "type": "object",
+        "properties": {
+          "balance_cents": {
+            "type": "number",
+            "description": "可用余额，单位：**分**（整数，不要用浮点运算）",
+            "example": 17000
+          },
+          "status": {
+            "type": "number",
+            "description": "钱包状态：`0` 正常 · `1` 冻结（冻结后不能扣费）",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "查询时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          }
+        },
+        "required": [
+          "balance_cents",
+          "status",
+          "updated_at"
+        ]
+      },
+      "TransactionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "流水 ID（**string**）",
+            "example": "9001"
+          },
+          "type": {
+            "type": "number",
+            "description": "类型：`1` 充值 · `2` 扣费 · `3` 退款 · `4` 调账",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "example": 2
+          },
+          "amount_cents": {
+            "type": "number",
+            "description": "金额，单位：分（正数，方向由 type 决定）",
+            "example": 50000
+          },
+          "balance_after": {
+            "type": "number",
+            "description": "本次流水完成后的余额快照，单位：分",
+            "example": 17000
+          },
+          "product_code": {
+            "type": "string",
+            "description": "产品代码；门户内部流水（充值/调账）为空",
+            "example": "storage",
+            "nullable": true
+          },
+          "bill_no": {
+            "type": "string",
+            "description": "幂等键：产品账单号 / 充值单号 / 退款单号",
+            "example": "storage-20261005-000123"
+          },
+          "refund_of_bill_no": {
+            "type": "string",
+            "description": "退款流水指向的原扣费单号；非退款为空",
+            "example": null,
+            "nullable": true
+          },
+          "detail": {
+            "type": "object",
+            "description": "账单明细（产品传入时原样入）。**自由结构**，前端按 key 通用渲染",
+            "additionalProperties": true,
+            "example": {
+              "plan": "续费·标准版"
+            },
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "发生时间（UTC ISO 8601）",
+            "example": "2026-10-05T02:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "amount_cents",
+          "balance_after",
+          "product_code",
+          "bill_no",
+          "refund_of_bill_no",
+          "detail",
+          "created_at"
+        ]
+      },
+      "TransactionListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "流水列表，按时间倒序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
         ]
       },
       "RechargeApplyDto": {
@@ -1702,6 +2690,250 @@
           "amount_cents"
         ]
       },
+      "RechargeApplyResultView": {
+        "type": "object",
+        "properties": {
+          "apply_id": {
+            "type": "string",
+            "description": "申请单号（**string**）；查进度用 `GET /api/wallet/recharges`",
+            "example": "60"
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 待核销（刚提交必然是 0）",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "example": 0
+          },
+          "notice": {
+            "type": "string",
+            "description": "给用户的提示文案（前端原样展示即可）",
+            "example": "请线下转账后等待管理员核销，到账后可在此页查看进度"
+          }
+        },
+        "required": [
+          "apply_id",
+          "status",
+          "notice"
+        ]
+      },
+      "MyRechargeView": {
+        "type": "object",
+        "properties": {
+          "apply_id": {
+            "type": "string",
+            "description": "充值申请单号（**string**）",
+            "example": "60"
+          },
+          "amount_cents": {
+            "type": "number",
+            "description": "申请金额，单位：分",
+            "example": 10000
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 待核销 · `1` 已到账 · `2` 驳回",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "example": 1
+          },
+          "balance_after": {
+            "type": "number",
+            "description": "**到账后余额**；仅 `status=1` 时非空（其余状态为 null，不是 0）",
+            "example": 10000,
+            "nullable": true
+          },
+          "reject_reason": {
+            "type": "string",
+            "description": "驳回原因；仅 `status=2` 时非空",
+            "example": "转账凭证不清晰",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "description": "用户提交时填写的转账备注",
+            "example": "微信转账，尾号1234",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "申请时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:27:00Z"
+          }
+        },
+        "required": [
+          "apply_id",
+          "amount_cents",
+          "status",
+          "balance_after",
+          "reject_reason",
+          "remark",
+          "created_at"
+        ]
+      },
+      "MyRechargeListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "充值记录，按申请时间倒序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyRechargeView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "AdminRechargeView": {
+        "type": "object",
+        "properties": {
+          "apply_id": {
+            "type": "string",
+            "description": "充值申请单号（**string**）",
+            "example": "60"
+          },
+          "amount_cents": {
+            "type": "number",
+            "description": "申请金额，单位：分",
+            "example": 10000
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 待核销 · `1` 已到账 · `2` 驳回",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "example": 1
+          },
+          "balance_after": {
+            "type": "number",
+            "description": "**到账后余额**；仅 `status=1` 时非空（其余状态为 null，不是 0）",
+            "example": 10000,
+            "nullable": true
+          },
+          "reject_reason": {
+            "type": "string",
+            "description": "驳回原因；仅 `status=2` 时非空",
+            "example": "转账凭证不清晰",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "description": "用户提交时填写的转账备注",
+            "example": "微信转账，尾号1234",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "申请时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:27:00Z"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "申请用户 ID",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "申请用户名（管理端核对用）",
+            "example": "luobo",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "description": "申请用户手机号",
+            "example": "13800000000",
+            "nullable": true
+          },
+          "reviewed_by": {
+            "type": "string",
+            "description": "经办人（管理员）用户 ID；未核销时为空",
+            "example": "01a123f4-7110-795a-8102-e03731eefd14",
+            "nullable": true
+          },
+          "reviewed_by_username": {
+            "type": "string",
+            "description": "**经办人用户名**（前端展示用这个，不要展示 UUID）。2026-10-10 新增",
+            "example": "admin",
+            "nullable": true
+          }
+        },
+        "required": [
+          "apply_id",
+          "amount_cents",
+          "status",
+          "balance_after",
+          "reject_reason",
+          "remark",
+          "created_at",
+          "user_id",
+          "username",
+          "phone",
+          "reviewed_by",
+          "reviewed_by_username"
+        ]
+      },
+      "AdminRechargeListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "充值申请列表，按申请时间倒序",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminRechargeView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
       "ConfirmRechargeDto": {
         "type": "object",
         "properties": {
@@ -1717,6 +2949,43 @@
             "example": "未收到对应转账"
           }
         }
+      },
+      "RechargeConfirmResultView": {
+        "type": "object",
+        "properties": {
+          "apply_id": {
+            "type": "string",
+            "description": "被核销的申请单号（**string**）",
+            "example": "60"
+          },
+          "status": {
+            "type": "number",
+            "description": "核销后状态：`1` 已到账 · `2` 已驳回",
+            "enum": [
+              1,
+              2
+            ],
+            "example": 1
+          },
+          "balance_cents": {
+            "type": "number",
+            "description": "到账后余额，单位：分；**驳回时为 null**",
+            "example": 10000,
+            "nullable": true
+          },
+          "transaction_id": {
+            "type": "string",
+            "description": "到账产生的流水 ID；驳回时为空",
+            "example": "9001",
+            "nullable": true
+          }
+        },
+        "required": [
+          "apply_id",
+          "status",
+          "balance_cents",
+          "transaction_id"
+        ]
       },
       "DeductDto": {
         "type": "object",
@@ -1749,7 +3018,8 @@
           },
           "detail": {
             "type": "object",
-            "description": "账单明细，原样写入流水供用户查看",
+            "description": "账单明细，原样写入流水供用户查看。**自由结构**，门户不解析",
+            "additionalProperties": true,
             "example": {
               "plan": "续费·标准版",
               "period": "30天",
@@ -1761,6 +3031,31 @@
           "portal_user_id",
           "bill_no",
           "amount_cents"
+        ]
+      },
+      "DeductView": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "固定为 true；重复扣费（幂等命中）也为 true",
+            "example": true
+          },
+          "balance_cents": {
+            "type": "number",
+            "description": "扣费后余额，单位：分",
+            "example": 17000
+          },
+          "bill_no": {
+            "type": "string",
+            "description": "幂等键回显（产品传入的 bill_no）",
+            "example": "storage-20261010-0001"
+          }
+        },
+        "required": [
+          "success",
+          "balance_cents",
+          "bill_no"
         ]
       },
       "RefundDto": {
@@ -1792,6 +3087,167 @@
           "bill_no",
           "refund_bill_no",
           "amount_cents"
+        ]
+      },
+      "RefundView": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "固定为 true；重复退款（幂等命中）也为 true",
+            "example": true
+          },
+          "balance_cents": {
+            "type": "number",
+            "description": "退款后余额，单位：分",
+            "example": 20000
+          }
+        },
+        "required": [
+          "success",
+          "balance_cents"
+        ]
+      },
+      "ProductView": {
+        "type": "object",
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "description": "产品代码",
+            "enum": [
+              "storage",
+              "phone",
+              "desktop"
+            ],
+            "example": "storage"
+          },
+          "sku_id": {
+            "type": "string",
+            "description": "产品内 SKU ID",
+            "example": "storage-500g"
+          },
+          "name": {
+            "type": "string",
+            "description": "门户展示名",
+            "example": "云存储·500G"
+          },
+          "spec": {
+            "type": "object",
+            "description": "**产品自定义结构**，门户原样透传。前端要按 key 通用渲染，不要假设一定有某个字段",
+            "additionalProperties": true,
+            "example": {
+              "quota_gb": 500,
+              "transfer": "unlimited"
+            },
+            "nullable": true
+          },
+          "price_cents": {
+            "type": "number",
+            "description": "单价，单位：**分**",
+            "example": 50000
+          },
+          "billing_mode": {
+            "type": "number",
+            "description": "计费模式：1 包周期（下单即扣） 2 按量（后付费由产品出账）",
+            "enum": [
+              1,
+              2
+            ],
+            "example": 1
+          },
+          "period_days": {
+            "type": "number",
+            "description": "周期天数，按量计费时为 null",
+            "example": 30,
+            "nullable": true
+          },
+          "stock": {
+            "type": "number",
+            "description": "库存；**null = 不限或产品未上报 → 前端显示「现货」而不是「0 件」**",
+            "example": null,
+            "nullable": true
+          },
+          "synced_at": {
+            "type": "string",
+            "description": "最近一次从产品同步到门户的时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          }
+        },
+        "required": [
+          "product_code",
+          "sku_id",
+          "name",
+          "spec",
+          "price_cents",
+          "billing_mode",
+          "period_days",
+          "stock",
+          "synced_at"
+        ]
+      },
+      "CatalogFreshnessView": {
+        "type": "object",
+        "properties": {
+          "stale": {
+            "type": "boolean",
+            "description": "**`true` = 当前目录不可信**：最近一次同步失败，或目录数据超过 3 个同步周期没更新。\n\n为什么需要：同步失败时门户**保留上一次成功的目录**（宁愿卖旧价也不让商城空掉），\n所以会出现\"日志一直在报同步失败，但商品列表照常返回\"的情况 —— 前端据此提示\n「价格可能不是最新，下单前请确认」，管理端也可据此报警。",
+            "example": true
+          },
+          "last_sync_at": {
+            "type": "string",
+            "description": "最近一次同步**尝试**的时间（失败也算尝试），UTC ISO 8601；从未同步过为 `null`",
+            "example": "2026-10-12T01:32:13Z",
+            "nullable": true
+          },
+          "last_sync_ok": {
+            "type": "boolean",
+            "description": "最近一次同步是否成功；无记录为 `null`",
+            "example": false,
+            "nullable": true
+          },
+          "last_error": {
+            "type": "string",
+            "description": "最近一次失败原因（如 `timeout of 10000ms exceeded`）；成功或无记录为 `null`",
+            "example": "timeout of 10000ms exceeded",
+            "nullable": true
+          },
+          "data_synced_at": {
+            "type": "string",
+            "description": "目录里最新一条商品的同步时间 = **当前展示价格的新鲜度**；无商品为 `null`。\n与 `last_sync_at` 的区别：后者是\"最近一次尝试\"，这个是\"数据实际停留在什么时候\"。",
+            "example": "2026-10-10T09:24:01Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "stale",
+          "last_sync_at",
+          "last_sync_ok",
+          "last_error",
+          "data_synced_at"
+        ]
+      },
+      "ProductListView": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "在售商品列表（不分页）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductView"
+            }
+          },
+          "catalog": {
+            "description": "目录新鲜度（判断展示价格是否可信）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CatalogFreshnessView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "list",
+          "catalog"
         ]
       },
       "OrderItemInputDto": {
@@ -1839,6 +3295,428 @@
           "items"
         ]
       },
+      "OrderItemView": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "description": "订单项 ID（**string**；同时是产品开通的幂等键）",
+            "example": "90"
+          },
+          "product_code": {
+            "type": "string",
+            "description": "产品代码",
+            "example": "storage"
+          },
+          "sku_id": {
+            "type": "string",
+            "description": "产品内 SKU ID",
+            "example": "storage-500g"
+          },
+          "name": {
+            "type": "string",
+            "description": "商品名（下单时快照）",
+            "example": "云存储·500G",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "number",
+            "description": "数量",
+            "example": 1
+          },
+          "price_cents": {
+            "type": "number",
+            "description": "下单时单价快照，单位：分",
+            "example": 50000
+          },
+          "status": {
+            "type": "number",
+            "description": "订单项状态：`0` 待支付 · `1` 已支付（**开通中**）· `2` 开通成功 · `3` 失败待退款 · `4` 已退款",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "example": 2
+          },
+          "instance_id": {
+            "type": "string",
+            "description": "产品返回的实例 ID；仅开通成功时非空",
+            "example": "st-0001",
+            "nullable": true
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "到期时间（UTC ISO 8601）；仅开通成功时非空",
+            "example": "2026-11-09T03:00:00Z",
+            "nullable": true
+          },
+          "fail_reason": {
+            "type": "string",
+            "description": "开通失败原因（机器码，仅失败/退款时有值）。\n\n**取值清单（D 组 D-F1，2026-10-10 从实现里核对）**：\n- `PROVISION_FAILED` —— 调用产品开通接口失败且重试耗尽（**最常见**）\n- `PROVISION_REJECTED` —— 产品明确拒绝但未带业务码\n- `4003` —— 产品侧报「商品不存在或已下架」（数字码由**产品**回传）\n- `4004` —— 产品侧报「库存不足」（同上）\n  ⚠️ 这两个数字码只在**产品返回非 0 `code`** 时出现。若产品用非标准 code（如 500），\n  这里会落成产品自己的数字（如 `\"500\"`）——**前端必须有兜底文案**\n- `NETWORK` —— 网络失败/超时（重试后通常落成 `PROVISION_FAILED`）\n- `BAD_RESPONSE` —— 产品返回成功但缺 `instance_id`\n\n**兜底建议**：未在清单内一律显示「开通失败，已自动退款」。\n门户**不做中文翻译**（这些是产品侧机器码，可能新增），故不提供 `fail_reason_text`；\n如需中文由前端维护映射表。",
+            "example": "PROVISION_FAILED",
+            "nullable": true
+          },
+          "refund_bill_no": {
+            "type": "string",
+            "description": "**退款流水号**，形如 `refund:{item_id}:{attempt}`；非退款项为 `null`（2026-10-10 新增，D 组 D-F3）。\n\n用途：前端可从订单详情**直接定位这笔退款**（去流水页搜这个 `bill_no` 即可），\n不必按金额和时间人工翻找。与扣费单 `order:{order_id}:item:{item_id}` 一一对应。",
+            "example": "refund:90:1",
+            "nullable": true
+          },
+          "refunded_at": {
+            "type": "string",
+            "description": "**退款到账时间**（UTC ISO 8601，即退款流水的记账时间）；非退款项为 `null`",
+            "example": "2026-10-10T03:05:00Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "item_id",
+          "product_code",
+          "sku_id",
+          "name",
+          "quantity",
+          "price_cents",
+          "status",
+          "instance_id",
+          "expire_at",
+          "fail_reason",
+          "refund_bill_no",
+          "refunded_at"
+        ]
+      },
+      "CreateOrderResultView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单 ID（**string**）",
+            "example": "78"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "订单号，形如 `O20261010-483920`",
+            "example": "O20261010-483920"
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额，单位：分（后端按缓存价重算，不信任前端传价）",
+            "example": 50000
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "description": "支付时间；未支付时为空",
+            "example": "2026-10-10T03:01:00Z",
+            "nullable": true
+          },
+          "items": {
+            "description": "订单项（按项返回状态，**前端要按项渲染**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemView"
+            }
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "total_cents",
+          "status",
+          "created_at",
+          "paid_at",
+          "items"
+        ]
+      },
+      "OrderView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单 ID（**string**）",
+            "example": "78"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "订单号，形如 `O20261010-483920`",
+            "example": "O20261010-483920"
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额，单位：分（后端按缓存价重算，不信任前端传价）",
+            "example": 50000
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "description": "支付时间；未支付时为空",
+            "example": "2026-10-10T03:01:00Z",
+            "nullable": true
+          },
+          "items": {
+            "description": "订单项（按项返回状态，**前端要按项渲染**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemView"
+            }
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "total_cents",
+          "status",
+          "created_at",
+          "paid_at",
+          "items"
+        ]
+      },
+      "OrderListView": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "订单列表（含 items，结构与订单详情一致）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderView"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "总条数（`status` 筛选后为筛选结果数）",
+            "example": 3
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ]
+      },
+      "OrderDetailView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单 ID（**string**）",
+            "example": "78"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "订单号，形如 `O20261010-483920`",
+            "example": "O20261010-483920"
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额，单位：分（后端按缓存价重算，不信任前端传价）",
+            "example": 50000
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "description": "支付时间；未支付时为空",
+            "example": "2026-10-10T03:01:00Z",
+            "nullable": true
+          },
+          "items": {
+            "description": "订单项（按项返回状态，**前端要按项渲染**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemView"
+            }
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "total_cents",
+          "status",
+          "created_at",
+          "paid_at",
+          "items"
+        ]
+      },
+      "PayResultView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单 ID（**string**）",
+            "example": "78"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "订单号，形如 `O20261010-483920`",
+            "example": "O20261010-483920"
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额，单位：分（后端按缓存价重算，不信任前端传价）",
+            "example": 50000
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功 · `2` 全部成功 · `3` 全部失败",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "description": "支付时间；未支付时为空",
+            "example": "2026-10-10T03:01:00Z",
+            "nullable": true
+          },
+          "items": {
+            "description": "订单项（按项返回状态，**前端要按项渲染**）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemView"
+            }
+          },
+          "accepted_items": {
+            "type": "number",
+            "description": "本次**受理**的项数（已扣费、正在开通），不是开通成功数",
+            "example": 1
+          },
+          "processing_items": {
+            "type": "number",
+            "description": "仍在开通中的项数。**> 0 时前端应轮询订单详情**（建议 1~2 秒一次），直到没有项处于状态 `1`",
+            "example": 1
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "total_cents",
+          "status",
+          "created_at",
+          "paid_at",
+          "items",
+          "accepted_items",
+          "processing_items"
+        ]
+      },
+      "ReconciliationView": {
+        "type": "object",
+        "properties": {
+          "biz_date": {
+            "type": "string",
+            "description": "对账业务日（YYYY-MM-DD）",
+            "example": "2026-10-09"
+          },
+          "product_code": {
+            "type": "string",
+            "description": "产品代码",
+            "example": "storage"
+          },
+          "portal_total_cents": {
+            "type": "number",
+            "description": "门户侧合计（分）",
+            "example": 130000
+          },
+          "product_total_cents": {
+            "type": "number",
+            "description": "产品侧上报合计（分）",
+            "example": 130000
+          },
+          "diff_cents": {
+            "type": "number",
+            "description": "差额（分）；**非 0 即有差异**",
+            "example": 0
+          },
+          "diff_count": {
+            "type": "number",
+            "description": "差异笔数",
+            "example": 0
+          },
+          "diffs": {
+            "type": "array",
+            "description": "差异明细：仅产品侧有 / 仅门户侧有 / 金额不符",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "example": []
+          }
+        },
+        "required": [
+          "biz_date",
+          "product_code",
+          "portal_total_cents",
+          "product_total_cents",
+          "diff_cents",
+          "diff_count",
+          "diffs"
+        ]
+      },
       "RunReconciliationDto": {
         "type": "object",
         "properties": {
@@ -1856,6 +3734,37 @@
         "required": [
           "biz_date",
           "product_code"
+        ]
+      },
+      "ProvisionJobsView": {
+        "type": "object",
+        "properties": {
+          "stats": {
+            "type": "object",
+            "description": "各状态任务数：0 待处理 · 1 处理中 · 2 成功 · 3 失败。**key 为状态名，value 为数量**",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "example": {
+              "pending": 0,
+              "processing": 0,
+              "succeeded": 12,
+              "failed": 1
+            }
+          },
+          "failed_samples": {
+            "type": "array",
+            "description": "失败任务样本（最多若干条），前端据此提示\"有开通失败待处理\"",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "example": []
+          }
+        },
+        "required": [
+          "stats",
+          "failed_samples"
         ]
       },
       "ReportBillItemDto": {
@@ -1920,6 +3829,126 @@
           "biz_date",
           "product_code",
           "bills"
+        ]
+      },
+      "ReportBillsView": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "number",
+            "description": "本次接收的账单条数",
+            "example": 30
+          },
+          "upserted": {
+            "type": "number",
+            "description": "落库（插入或按 bill_no 幂等覆盖）的条数",
+            "example": 30
+          }
+        },
+        "required": [
+          "received",
+          "upserted"
+        ]
+      },
+      "HealthView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "`ok` 数据库可达 · `degraded` 数据库不可达",
+            "example": "ok",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "env": {
+            "type": "string",
+            "description": "运行环境",
+            "example": "development"
+          },
+          "database": {
+            "type": "string",
+            "description": "数据库连通性",
+            "example": "up",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "time": {
+            "type": "string",
+            "description": "响应时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          }
+        },
+        "required": [
+          "status",
+          "env",
+          "database",
+          "time"
+        ]
+      },
+      "MetaView": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "description": "服务名",
+            "example": "cloud-portal"
+          },
+          "contract": {
+            "type": "string",
+            "description": "当前依据的契约版本",
+            "example": "云平台统一门户 API 契约 v1.0 (2026-09-30)"
+          },
+          "issuer": {
+            "type": "string",
+            "description": "JWT issuer",
+            "example": "cloud-portal"
+          },
+          "jwtKid": {
+            "type": "string",
+            "description": "当前生效的 JWT kid（轮换期会有多个）",
+            "example": "portal-2026-10"
+          },
+          "accessTtlSeconds": {
+            "type": "number",
+            "description": "access token 有效期（秒）",
+            "example": 7200
+          },
+          "refreshTtlSeconds": {
+            "type": "number",
+            "description": "refresh token 有效期（秒）",
+            "example": 1209600
+          },
+          "products": {
+            "description": "已接入的产品代码",
+            "example": [
+              "storage",
+              "phone",
+              "desktop"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "time": {
+            "type": "string",
+            "description": "响应时间（UTC ISO 8601）",
+            "example": "2026-10-10T03:00:00Z"
+          }
+        },
+        "required": [
+          "service",
+          "contract",
+          "issuer",
+          "jwtKid",
+          "accessTtlSeconds",
+          "refreshTtlSeconds",
+          "products",
+          "time"
         ]
       }
     }

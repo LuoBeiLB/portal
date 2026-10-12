@@ -62,9 +62,11 @@ try {
     $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
-    # 公开接口限流阈值调小，便于在 e2e 里真的触发 1001（生产默认 120 次/分钟）
+    # 公开接口限流：**第 3 轮不需要验证限流**，而它自己要打 6 次 /shop/products，
+    # 阈值调成 5 会把后面的商品查询拒掉（表现为"取不到最便宜 SKU"这类莫名失败）。
+    # 限流验证在第 2 轮（那里的 15 段断言会先把配额清空再打满）。
     $env:PUBLIC_RATE_WINDOW = '60'
-    $env:PUBLIC_RATE_MAX = '5'
+    $env:PUBLIC_RATE_MAX = '300'
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-run.txt" `
         -RedirectStandardError "$env:TEMP\stub-run-err.txt" -PassThru -WindowStyle Hidden

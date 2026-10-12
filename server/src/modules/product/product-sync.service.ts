@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Interval } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -32,6 +32,32 @@ export interface ProductView {
 }
 
 /**
+ * 商品列表响应（含**目录新鲜度**，2026-10-12 新增）。
+ *
+ * 为什么加：同步失败时门户**保留上一次成功的目录**（宁愿卖旧价也不让商城空掉），
+ * 于是会出现"日志一直在报同步失败，但商品列表照常返回"的现象——
+ * 前端和用户都看不出这些是**旧价格**。
+ *
+ * `catalog.stale = true` 就是给前端的信号：可以照常展示，但应提示
+ * 「价格可能不是最新，下单前请确认」；管理端也可以据此报警。
+ */
+export interface ProductListView {
+  list: ProductView[];
+  catalog: {
+    /** true = 最近一次同步失败，或目录超过 STALE 阈值（默认 3 个同步周期）没更新 */
+    stale: boolean;
+    /** 最近一次同步**尝试**的时间（失败也算尝试），UTC ISO 8601；从未同步过为 null */
+    last_sync_at: string | null;
+    /** 最近一次同步是否成功 */
+    last_sync_ok: boolean | null;
+    /** 最近一次失败原因；成功或无记录为 null */
+    last_error: string | null;
+    /** 目录里最新一条商品的同步时间（= 当前展示价格的"新鲜度"），无商品为 null */
+    data_synced_at: string | null;
+  };
+}
+
+/**
  * 商品目录同步（契约 §5.1）。
  *
  * 契约要求：门户**每 10 分钟全量拉取 upsert**（product_code + sku_id 匹配），产品调价后最迟 10 分钟生效。
@@ -45,7 +71,10 @@ export class ProductSyncService {
   private readonly logger = new Logger(ProductSyncService.name);
 
   /** 商品列表进程内缓存：key = product_code（未过滤时为 '*'） */
-  private readonly listCache = new Map<string, { value: { list: ProductView[] }; expiresAt: number }>();
+  private readonly listCache = new Map<string, { value: ProductListView; expiresAt: number }>();
+
+  /** 连续失败次数：用于失败后的退避重试，避免产品挂掉时每 15 秒猛打 */
+  private consecutiveFailures = 0;
 
   constructor(
     @InjectRepository(ProductEntity) private readonly products: Repository<ProductEntity>,
@@ -54,17 +83,79 @@ export class ProductSyncService {
     private readonly config: PortalConfigService,
   ) {}
 
-  /** 定时全量同步（默认 10 分钟，见 PRODUCT_SYNC_INTERVAL_MS） */
-  @Cron(CronExpression.EVERY_MINUTE)
+  /**
+   * 商品目录同步（契约 §5.1）。
+   *
+   * ## 为什么用 `@Interval` 而不是 `@Cron(EVERY_MINUTE)`
+   *
+   * cron 的"每分钟"指**每个整分的第 0 秒**，不是"每隔 60 秒"：
+   * 服务在 10:00:30 启动时，第一次同步要等到 10:01:00 —— 最长空窗 60 秒。
+   * 实测被前端撞上过（`GET /shop/products` 返回空列表，前端以为"后端没接商品"）。
+   * `@Interval` 是**相对启动时间**计时，首次检查在启动后 15 秒。
+   *
+   * ## 守卫为什么不能只看"上次同步时间"（2026-10-10 修）
+   *
+   * 原实现只比较 `now - 上次startedAt < intervalMs`，**不看上次结果**。后果：
+   * 一次偶发失败（超时）或一次"成功但返回 0 条"，都会被当成"刚同步过"，
+   * **10 分钟内不再重试**；而本地商品表是空的 → 商品列表一直空
+   * → 前端以为"门户没连上云存储"。清空过商品表时更会**永久卡死**。
+   *
+   * 现在的规则：
+   * 1. 本地商品表为空 → **必须同步**，不看间隔（空目录会直接打断"浏览→下单"主流程）
+   * 2. 上次同步失败 → 退避重试（15s / 30s / 60s，上限一个正常周期）
+   * 3. 正常情况 → 按 `PRODUCT_SYNC_INTERVAL_MS`（默认 10 分钟）
+   */
+  @Interval(15_000)
   async scheduledSync(): Promise<void> {
     const intervalMs = this.config.shop.productSyncIntervalMs;
+
+    // 规则 1：本地目录空 → 立刻同步，不受间隔限制
+    const localCount = await this.products.count();
+    if (localCount === 0) {
+      this.logger.warn('本地商品目录为空，立即触发同步（不受同步间隔限制）');
+      await this.runSync();
+      return;
+    }
+
     const last = await this.logs.find({ order: { id: 'DESC' }, take: 1 });
-    const lastAt = last[0]?.startedAt ? new Date(last[0].startedAt).getTime() : 0;
+    const lastRow = last[0];
+    const lastAt = lastRow?.startedAt ? new Date(lastRow.startedAt).getTime() : 0;
     // 没有历史记录（首次启动/日志被清）时要立刻同步，不能空等一个周期
     const neverSynced = last.length === 0;
-    if (!neverSynced && Date.now() - lastAt < intervalMs) return;
+    if (neverSynced) {
+      await this.runSync();
+      return;
+    }
 
-    await this.syncAll();
+    // 规则 2：上次失败 → 退避重试（15s → 30s → 60s，最多不超过一个正常周期）
+    // `status` 是 tinyint：0 成功 / 1 失败（见 ProductSyncLogEntity 注释）
+    if (lastRow.status === 1) {
+      const backoff = Math.min(15_000 * 2 ** Math.max(0, this.consecutiveFailures - 1), intervalMs);
+      if (Date.now() - lastAt < backoff) return;
+      this.logger.warn(`上次同步失败（${lastRow.errorMsg ?? '未知原因'}），退避 ${Math.round(backoff / 1000)}s 后重试`);
+      await this.runSync();
+      return;
+    }
+
+    // 规则 3：正常周期
+    if (Date.now() - lastAt < intervalMs) return;
+    await this.runSync();
+  }
+
+  /** 跑一轮同步并维护失败计数 */
+  private async runSync(): Promise<void> {
+    const results = await this.syncAll();
+    const failed = results.filter((item) => item.status === 'failed').length;
+    const empty = results.filter((item) => item.status === 'ok' && item.fetched === 0).length;
+
+    if (failed > 0 || empty > 0) {
+      this.consecutiveFailures += 1;
+      if (empty > 0) {
+        this.logger.warn(`有 ${empty} 个产品返回了 0 条商品（保存商品已在产品侧下架，需确认产品侧目录）`);
+      }
+    } else {
+      this.consecutiveFailures = 0;
+    }
   }
 
   /** 参与同步的产品（地址留空的视为未接入，不刷错误日志） */
@@ -180,8 +271,11 @@ export class ProductSyncService {
    * 带进程内 TTL 缓存：商品每 10 分钟才同步一次，同一份响应在周期内完全相同，
    * 而这是公开接口，不打缓存会被无限刷库。TTL 默认 10 秒（远小于同步周期，用户无感知），
    * 且每次同步成功后会**主动失效**，所以调价不会因为缓存而延迟生效。
+   *
+   * ⚠️ **同步失败时这里照常返回旧目录**（有意为之：不让商城整个空掉），
+   * 因此响应里带 `catalog.stale` 让前端能提示"价格可能不是最新"。见 `ProductListView`。
    */
-  async listForShop(productCode?: string): Promise<{ list: ProductView[] }> {
+  async listForShop(productCode?: string): Promise<ProductListView> {
     const ttlMs = this.config.shop.productListCacheTtlMs;
     const cacheKey = productCode ?? '*';
 
@@ -194,10 +288,45 @@ export class ProductSyncService {
       where: productCode ? { productCode, isActive: 1 } : { isActive: 1 },
       order: { productCode: 'ASC', priceCents: 'ASC' },
     });
-    const value = { list: rows.map(toProductView) };
+    const value: ProductListView = {
+      list: rows.map(toProductView),
+      catalog: await this.catalogFreshness(rows),
+    };
 
     if (ttlMs > 0) this.listCache.set(cacheKey, { value, expiresAt: Date.now() + ttlMs });
     return value;
+  }
+
+  /**
+   * 计算目录新鲜度。
+   *
+   * `stale` 为 true 的三种情况：
+   * 1. **从未同步过**（没有同步日志）—— 没成功同步过的目录不该被当成新鲜
+   * 2. 最近一次同步**失败**（最直观：日志里正在报错）
+   * 3. 目录数据超过 `3 × 同步周期` 没更新 —— 覆盖"同步一直成功但拿到 0 条"这种
+   *
+   * 阈值取 3 个周期：单次失败不报警（会自动退避重试），持续失败才提示。
+   */
+  private async catalogFreshness(rows: ProductEntity[]): Promise<ProductListView['catalog']> {
+    const last = await this.logs.find({ order: { id: 'DESC' }, take: 1 });
+    const lastRow = last[0] ?? null;
+
+    const syncedTimes = rows
+      .map((row) => (row.syncedAt ? new Date(row.syncedAt).getTime() : null))
+      .filter((value): value is number => value !== null && !Number.isNaN(value));
+    const dataSyncedAt = syncedTimes.length > 0 ? new Date(Math.max(...syncedTimes)) : null;
+
+    const staleThresholdMs = this.config.shop.productSyncIntervalMs * 3;
+    const tooOld = dataSyncedAt === null || Date.now() - dataSyncedAt.getTime() > staleThresholdMs;
+    const neverSynced = lastRow === null;
+
+    return {
+      stale: neverSynced || tooOld || lastRow.status === 1,
+      last_sync_at: lastRow?.startedAt ? new Date(lastRow.startedAt).toISOString() : null,
+      last_sync_ok: lastRow ? lastRow.status === 0 : null,
+      last_error: lastRow?.errorMsg ?? null,
+      data_synced_at: dataSyncedAt ? dataSyncedAt.toISOString() : null,
+    };
   }
 
   /** 清空商品列表缓存（同步成功后调用，保证调价立刻可见） */

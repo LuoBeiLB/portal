@@ -610,11 +610,40 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('声明了 Bearer 与 X-Internal-Key 鉴权方案', Boolean(doc.body?.components?.securitySchemes?.bearer) && Boolean(doc.body?.components?.securitySchemes?.['internal-key']), Object.keys(doc.body?.components?.securitySchemes ?? {}));
     check('管理端接口标注 bearer（2026-10-10 起改用管理员账号，不再有 admin-key 方案）', doc.body?.paths?.['/api/admin/recharges']?.get?.security?.some((s) => s.bearer), doc.body?.paths?.['/api/admin/recharges']?.get?.security);
     check('DTO 字段有 schema 描述（不是空对象）', Boolean(doc.body?.components?.schemas?.RegisterDto?.properties?.username), Object.keys(doc.body?.components?.schemas ?? {}).slice(0, 8));
+
+    // ── 响应结构必须写全（2026-10-10 补，C 组前端需求 P1-1）──────────────────
+    // 病根：接口只声明了"HTTP 200"，没有响应结构，前端只能"调一次把返回打印出来猜字段名"。
+    // 这里遍历整个文档，**任何一个接口漏写响应结构都会让本段失败**，不再靠人工发现。
+    {
+      // 这两个接口刻意不套 {code,data} 壳
+      const RAW = new Set(['/.well-known/jwks.json', '/api/admin/transactions/export']);
+      const missing = [];
+      let declared = 0;
+      for (const [path, ops] of Object.entries(doc.body?.paths ?? {})) {
+        if (RAW.has(path)) continue;
+        for (const [method, op] of Object.entries(ops)) {
+          const schema = op?.responses?.[200]?.content?.['application/json']?.schema;
+          if (schema?.$ref || schema?.type === 'array') declared += 1;
+          else missing.push(`${method.toUpperCase()} ${path}`);
+        }
+      }
+      check(
+        `**所有接口都声明了响应结构**（已声明 ${declared} 个，缺失 ${missing.length} 个）`,
+        missing.length === 0,
+        missing,
+      );
+      check('响应模型数量合理（*View 模型已生成）', Object.keys(doc.body?.components?.schemas ?? {}).filter((n) => n.endsWith('View')).length >= 20, Object.keys(doc.body?.components?.schemas ?? {}).filter((n) => n.endsWith('View')).length);
+    }
   }
 
   // 必须放在最后：打满限流后，同一 IP 的商品列表请求会被拒 1001
   console.log(`\n=== 15. 公开接口限流（商品列表）===`);
   {
+    // 先清掉前面段落用掉的配额，否则本轮可能"还没打几发就已经超了"，
+    // 或反过来因为窗口没刷新而误判（这条断言要对"配额从 0 开始"才有意义）
+    const cleared = clearRateLimitKeys();
+    check('已清空限流配额，本段从 0 开始计数', true, `清理 ${cleared} 个键`);
+
     const max = Number(process.env.PUBLIC_RATE_MAX || 5);
     let limited = null;
     for (let i = 0; i < max + 3; i += 1) {

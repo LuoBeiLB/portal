@@ -8,6 +8,7 @@ interface FakeRepo {
   findOne: jest.Mock;
   save: jest.Mock;
   create: jest.Mock;
+  count?: jest.Mock;
 }
 
 /** 构造一个只关心 `find` 的 Product 仓储替身（同步路径还需要 save/create/findOne） */
@@ -17,6 +18,7 @@ function productsOf(rows: ProductEntity[]): FakeRepo {
     findOne: jest.fn().mockResolvedValue(null),
     save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
     create: jest.fn().mockImplementation((data) => data),
+    count: jest.fn().mockResolvedValue(rows.length),
   };
 }
 
@@ -24,15 +26,29 @@ function serviceOf(
   products: FakeRepo,
   ttlMs: number,
   client: { fetchProducts?: jest.Mock } = {},
-  logs: { save?: jest.Mock } = {},
+  logs: { save?: jest.Mock; find?: jest.Mock } = {},
+  syncIntervalMs = 600_000,
 ): ProductSyncService {
   const config = {
-    shop: { productListCacheTtlMs: ttlMs, productTimeoutMs: 1000, provisionTimeoutMs: 1000 },
+    shop: {
+      productListCacheTtlMs: ttlMs,
+      productTimeoutMs: 1000,
+      provisionTimeoutMs: 1000,
+      productSyncIntervalMs: syncIntervalMs,
+    },
   } as unknown as PortalConfigService;
+
+  // 2026-10-12：listForShop 现在会额外查 p_product_sync_log 算"目录新鲜度"，
+  // 所以 logs 替身必须带 find（默认"无同步记录"）
+  const logsRepo = {
+    save: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
+    ...logs,
+  };
 
   const service = new ProductSyncService(
     products as never,
-    (logs as never) ?? ({ save: jest.fn() } as never),
+    logsRepo as never,
     (client as never) ?? ({} as never),
     config,
   );
@@ -122,5 +138,77 @@ describe('ProductSyncService.listForShop —— 公开接口的缓存行为', ()
     products.find.mockClear();
     await service.listForShop();
     expect(products.find).toHaveBeenCalledTimes(1); // 又重新查库 = 缓存确实失效
+  });
+});
+
+/**
+ * 目录新鲜度（2026-10-12 新增）。
+ *
+ * 背景：同步失败时门户**保留上一次成功的目录**（宁愿卖旧价也不让商城空掉），
+ * 于是会出现"日志一直报同步失败，但商品列表照常返回"的现象 ——
+ * 用户和管理端都看不出这些是旧价格。`catalog.stale` 就是给前端的信号。
+ */
+describe('ProductSyncService.listForShop —— 目录新鲜度（catalog）', () => {
+  const freshRow = (skuId: string, syncedAt: Date): ProductEntity =>
+    ({ ...row(skuId, 50000), syncedAt }) as ProductEntity;
+
+  it('最近一次同步失败 -> stale=true，并带出失败原因', async () => {
+    const products = productsOf([freshRow('storage-500g', new Date())]);
+    const logs = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: '9', status: 1, errorMsg: 'timeout of 10000ms exceeded', startedAt: new Date() }]),
+    };
+    const service = serviceOf(products, 0, {}, logs);
+
+    const result = await service.listForShop();
+    expect(result.catalog.stale).toBe(true);
+    expect(result.catalog.last_sync_ok).toBe(false);
+    expect(result.catalog.last_error).toBe('timeout of 10000ms exceeded');
+  });
+
+  it('最近一次同步成功且数据新鲜 -> stale=false，last_error 为 null', async () => {
+    const products = productsOf([freshRow('storage-500g', new Date())]);
+    const logs = { find: jest.fn().mockResolvedValue([{ id: '9', status: 0, errorMsg: null, startedAt: new Date() }]) };
+    const service = serviceOf(products, 0, {}, logs);
+
+    const result = await service.listForShop();
+    expect(result.catalog.stale).toBe(false);
+    expect(result.catalog.last_sync_ok).toBe(true);
+    expect(result.catalog.last_error).toBeNull();
+  });
+
+  it('**同步"成功但一直拿到 0 条"也会 stale**（数据超过 3 个周期没更新）', async () => {
+    // 数据停留在很久以前，但同步状态是"成功" —— 只靠 status 判断会漏掉这种
+    const old = new Date(Date.now() - 60 * 60 * 1000); // 1 小时前
+    const products = productsOf([freshRow('storage-500g', old)]);
+    const logs = { find: jest.fn().mockResolvedValue([{ id: '9', status: 0, errorMsg: null, startedAt: new Date() }]) };
+    const service = serviceOf(products, 0, {}, logs, 600_000); // 3 个周期 = 30 分钟
+
+    const result = await service.listForShop();
+    expect(result.catalog.stale).toBe(true);
+    expect(result.catalog.last_sync_ok).toBe(true); // 同步本身没报错
+    expect(result.catalog.data_synced_at).toBe(old.toISOString()); // 数据停在这里
+  });
+
+  it('从未同步过（无日志）-> stale=true 且字段为 null', async () => {
+    const products = productsOf([freshRow('storage-500g', new Date())]);
+    const service = serviceOf(products, 0, {}, { find: jest.fn().mockResolvedValue([]) });
+
+    const result = await service.listForShop();
+    expect(result.catalog.stale).toBe(true);
+    expect(result.catalog.last_sync_ok).toBeNull();
+    expect(result.catalog.last_sync_at).toBeNull();
+  });
+
+  it('商品为空 -> data_synced_at 为 null 且 stale=true', async () => {
+    const products = productsOf([]);
+    const logs = { find: jest.fn().mockResolvedValue([{ id: '9', status: 0, errorMsg: null, startedAt: new Date() }]) };
+    const service = serviceOf(products, 0, {}, logs);
+
+    const result = await service.listForShop();
+    expect(result.list).toHaveLength(0);
+    expect(result.catalog.data_synced_at).toBeNull();
+    expect(result.catalog.stale).toBe(true);
   });
 });

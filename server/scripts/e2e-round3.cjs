@@ -130,6 +130,26 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     check('stock 为 null 的不限量商品正常返回', unlimited?.stock === null, unlimited?.stock);
     const filtered = (await api('/api/shop/products?product_code=phone', { token })).body?.data?.list ?? [];
     check('product_code 过滤生效（phone 无商品）', filtered.length === 0, filtered.length);
+
+    // ── 目录新鲜度信号（2026-10-12 新增）──────────────────────────────
+    // 为什么需要：同步失败时门户**保留上一次成功的目录**（宁愿卖旧价也不让商城空掉），
+    // 于是会出现"日志一直报同步失败，但商品列表照常返回"的现象 ——
+    // 用户和管理端都看不出这些是旧价格。catalog.stale 就是给前端的信号。
+    {
+      const full = await api('/api/shop/products', { token });
+      const catalog = full.body?.data?.catalog;
+      check('响应含 catalog 新鲜度对象', Boolean(catalog), Object.keys(full.body?.data ?? {}));
+      check('catalog.stale / last_sync_ok / data_synced_at 字段齐全', catalog && 'stale' in catalog && 'last_sync_ok' in catalog && 'data_synced_at' in catalog, catalog);
+      // 本地联调时产品桩是通的，同步应成功 → stale 必须是 false（否则说明同步真有问题）
+      check('**同步正常时 catalog.stale=false**', catalog?.stale === false, catalog);
+      check('catalog.last_sync_ok=true', catalog?.last_sync_ok === true, catalog);
+      check('catalog.last_error 为空', catalog?.last_error === null, catalog?.last_error);
+      check(
+        'catalog.data_synced_at 是 UTC ISO 且不晚于现在',
+        /^\d{4}-\d{2}-\d{2}T/.test(String(catalog?.data_synced_at ?? '')) && new Date(catalog.data_synced_at) <= new Date(),
+        catalog?.data_synced_at,
+      );
+    }
   }
 
   console.log(`\n=== 2. 创建订单（§2.2）===`);
@@ -238,12 +258,174 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     check('组合订单中已受理项开通成功', settledMixed?.items?.[0]?.status === 2, settledMixed?.items?.[0]);
   }
 
+  console.log(`\n=== 4.1 支付语义（D 组 D-Q1/Q2/Q7/Q8，2026-10-10 实测固化）===`);
+  {
+    // 这些语义前端 D 组在开工前逐个问过，实测结论与他们的猜测**不同**（他们以为会是 code 0），
+    // 固化成断言，避免以后改动把前端的分支逻辑改坏。
+    //
+    // ⚠️ 本段刻意用**最便宜的 SKU** 并**先充值**：上一段把余额花到只剩几千分，
+    // 不充值的话后面的并发用例会因余额不足返回 3001（踩过，表现为"并发断言莫名其妙失败"）。
+    const topUpApply = await api('/api/wallet/recharge/apply', {
+      method: 'POST',
+      token,
+      body: { amount_cents: 100000, remark: 'e2e 4.1 支付语义段充值' },
+    });
+    await api(`/api/admin/recharges/${topUpApply.body?.data?.apply_id}/confirm`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+      body: { reject: false },
+    });
+
+    const cheapest = (await api('/api/shop/products?product_code=storage')).body?.data?.list
+      ?.filter((p) => Number(p.price_cents) > 0)
+      .sort((a, b) => Number(a.price_cents) - Number(b.price_cents))[0];
+    check('取到最便宜的在售 SKU 用于本段', Boolean(cheapest), cheapest);
+
+    const balanceBefore = (await api('/api/wallet/balance', { token })).body?.data?.balance_cents ?? 0;
+    check(`本段已充值到账，余额 ${balanceBefore} 分`, balanceBefore >= 100000, balanceBefore);
+    check(
+      `余额够买一件最便宜 SKU（${balanceBefore} >= ${cheapest?.price_cents}）`,
+      balanceBefore >= Number(cheapest?.price_cents ?? 0),
+      { balanceBefore, price: cheapest?.price_cents },
+    );
+
+    const mkOrder = async () =>
+      (
+        await api('/api/shop/orders', {
+          method: 'POST',
+          token,
+          body: { items: [{ product_code: cheapest.product_code, sku_id: cheapest.sku_id, quantity: 1 }] },
+        })
+      ).body;
+
+    // 建一单并支付，趁"开通中"立刻重复支付
+    const dup = await mkOrder();
+    check('建单成功（本段前置）', dup.code === 0 && Boolean(dup.data?.order_id), dup);
+    const dupId = dup.data?.order_id;
+
+    const first = await api(`/api/shop/orders/${dupId}/pay`, { method: 'POST', token });
+    check('首次支付 code=0 且返回 processing_items', first.body.code === 0 && typeof first.body?.data?.processing_items === 'number', first.body?.data);
+
+    // ① 开通中（项 status=1）再支付
+    const busy = await api(`/api/shop/orders/${dupId}/pay`, { method: 'POST', token });
+    check('**开通中重复支付 -> 4002**（不是 code 0 + accepted_items:0）', busy.body.code === 4002, busy.body);
+
+    // ② 终态再支付
+    await waitOrderSettled(token, dupId);
+    const done = await api(`/api/shop/orders/${dupId}/pay`, { method: 'POST', token });
+    check('**终态（全部成功）重复支付 -> 4002**', done.body.code === 4002, done.body);
+
+    // ③ 并发支付：只有一个真扣费
+    const conc = await mkOrder();
+    check('并发用例建单成功', conc.code === 0, conc);
+    const concId = conc.data?.order_id;
+    const beforeConc = (await api('/api/wallet/balance', { token })).body?.data?.balance_cents ?? 0;
+    const [r1, r2] = await Promise.all([
+      api(`/api/shop/orders/${concId}/pay`, { method: 'POST', token }),
+      api(`/api/shop/orders/${concId}/pay`, { method: 'POST', token }),
+    ]);
+    const codes = [r1.body.code, r2.body.code].sort();
+    check('**并发支付：一个成功一个 4002**', codes[0] === 0 && codes[1] === 4002, codes);
+    const afterConc = (await api('/api/wallet/balance', { token })).body?.data?.balance_cents ?? 0;
+    const concPrice = Number(conc.data?.total_cents ?? 0);
+    check(
+      `**并发只扣一次**（余额 ${beforeConc} → ${afterConc}，订单金额 ${concPrice}）`,
+      concPrice > 0 && beforeConc - afterConc === concPrice,
+      { beforeConc, afterConc, concPrice },
+    );
+    await waitOrderSettled(token, concId);
+
+    // ④ 他人订单与不存在的订单返回同一个码（不暴露存在性）
+    const other = await api('/api/auth/register', {
+      method: 'POST',
+      body: { username: `e2e3o_${stamp}`, password: 'Ab12345678' },
+    });
+    const otherToken = other.body?.data?.access_token;
+    const foreign = await api(`/api/shop/orders/${dupId}`, { token: otherToken });
+    const missing = await api('/api/shop/orders/99999999', { token });
+    check('他人订单 -> 4001', foreign.body.code === 4001, foreign.body);
+    check('**不存在的订单 -> 同样是 4001**（不暴露他人订单存在性）', missing.body.code === 4001, missing.body);
+    const foreignPay = await api(`/api/shop/orders/${dupId}/pay`, { method: 'POST', token: otherToken });
+    check('支付他人订单 -> 4001', foreignPay.body.code === 4001, foreignPay.body);
+
+    // ⑤ 订单详情不限流（轮询友好）
+    let limitedCount = 0;
+    for (let i = 0; i < 25; i += 1) {
+      const one = await api(`/api/shop/orders/${dupId}`, { token });
+      if (one.body.code === 1001) limitedCount += 1;
+    }
+    check('**订单详情连打 25 次不限流**（轮询友好）', limitedCount === 0, limitedCount);
+
+    // ⑥ 3001 的 data 为 null（前端要另调 balance 才能显示"还差多少"）
+    //    构造一个**必然超出余额**的订单：最贵 SKU × 10
+    const priciest = (await api('/api/shop/products?product_code=storage')).body?.data?.list
+      ?.filter((p) => Number(p.price_cents) > 0)
+      .sort((a, b) => Number(b.price_cents) - Number(a.price_cents))[0];
+    const poor = await api('/api/shop/orders', {
+      method: 'POST',
+      token,
+      body: { items: [{ product_code: priciest.product_code, sku_id: priciest.sku_id, quantity: 10 }] },
+    });
+    if (poor.body.code === 0) {
+      const poorPay = await api(`/api/shop/orders/${poor.body.data.order_id}/pay`, { method: 'POST', token });
+      check(
+        '**余额不足 3001 的 data 为 null**（前端需自己查余额算差额）',
+        poorPay.body.code === 3001 && poorPay.body.data === null,
+        poorPay.body,
+      );
+    } else {
+      check('（跳过 3001 断言）余额已不足以建大额订单', true, poor.body?.message);
+    }
+  }
+
   console.log(`\n=== 5. 我的订单列表（契约外补充）===`);
   {
     const res = await api('/api/shop/orders?page=1&size=10', { token });
     check('订单列表 code=0 且分页字段齐全', res.body.code === 0 && ['list', 'total', 'page', 'size'].every((k) => k in res.body.data), Object.keys(res.body?.data ?? {}));
     check('列表含刚创建的两单', (res.body?.data?.total ?? 0) >= 2, res.body?.data?.total);
     check('列表项含 items 明细', Array.isArray(res.body?.data?.list?.[0]?.items), null);
+
+    // ── status 筛选（2026-10-10 补，C 组前端需求 P0-1）────────────────────
+    // 病根：该参数此前**被后端完全忽略** —— 传任何值都返回全部，
+    // 前端四个 tab 点了没反应（静默错误：不报错、结果不对），
+    // 当时只能改成"一次拉满 100 条本地筛"，订单超过 100 条就不全。
+    {
+      const allTotal = res.body?.data?.total ?? 0;
+
+      // 逐个状态查：返回的每一项都必须是该状态，且 total 不超过全量
+      for (const status of [0, 1, 2, 3]) {
+        const filtered = await api(`/api/shop/orders?page=1&size=10&status=${status}`, { token });
+        const rows = filtered.body?.data?.list ?? [];
+        check(
+          `status=${status} 只返回该状态的订单（total=${filtered.body?.data?.total}）`,
+          filtered.body.code === 0 && rows.every((r) => r.status === status) && (filtered.body?.data?.total ?? 0) <= allTotal,
+          rows.map((r) => r.status),
+        );
+      }
+
+      // 四个状态的 total 之和 ~= 全量（本账号订单都处于这几个状态之一）
+      const totals = [];
+      for (const status of [0, 1, 2, 3]) {
+        const one = await api(`/api/shop/orders?status=${status}`, { token });
+        totals.push(one.body?.data?.total ?? 0);
+      }
+      check(
+        `**各状态 total 之和等于全量**（${totals.join('+')}=${totals.reduce((a, b) => a + b, 0)} vs 全量 ${allTotal}）`,
+        totals.reduce((a, b) => a + b, 0) === allTotal,
+        { totals, allTotal },
+      );
+
+      // 非法值必须是**报错**而不是静默忽略（静默忽略正是这次的病根）
+      const bad = await api('/api/shop/orders?status=999', { token });
+      check('**status 非法值 -> 1001（不再静默忽略）**', bad.body.code === 1001, bad.body);
+
+      const badStr = await api('/api/shop/orders?status=abc', { token });
+      check('status=abc -> 1001', badStr.body.code === 1001, badStr.body);
+
+      // 分页与筛选叠加：size=1 时每页只 1 条
+      const paged = await api('/api/shop/orders?status=0&page=1&size=1', { token });
+      check('筛选 + 分页可叠加（size=1 只返回 1 条）', (paged.body?.data?.list ?? []).length <= 1, (paged.body?.data?.list ?? []).length);
+    }
   }
 
   console.log(`\n=== 6. 流水（含订单扣费）===`);
