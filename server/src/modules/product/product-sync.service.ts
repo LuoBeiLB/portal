@@ -165,8 +165,16 @@ export class ProductSyncService {
 
   /** 全量同步所有**已接入**的产品；单个产品失败不影响其他产品 */
   async syncAll(): Promise<SyncResult[]> {
+    const endpoints = this.enabledEndpoints();
+    // 打出实际参与同步的端点：排查"为什么没同步/同步到哪去了"时，这一行能省很多时间
+    if (endpoints.length > 0) {
+      this.logger.log(`开始同步商品目录：${endpoints.map((item) => `${item.code}(${item.baseUrl})`).join(', ')}`);
+    } else {
+      this.logger.warn('没有任何已接入的产品（PRODUCT_*_BASE_URL 全为空），跳过商品同步');
+    }
+
     const results: SyncResult[] = [];
-    for (const endpoint of this.enabledEndpoints()) {
+    for (const endpoint of endpoints) {
       results.push(await this.syncOne(endpoint.code));
     }
     const failed = results.filter((item) => item.status === 'failed');
@@ -213,7 +221,17 @@ export class ProductSyncService {
       log.status = 1;
       log.errorMsg = message.slice(0, 500);
       await this.logs.save(log);
-      this.logger.error(`商品同步失败 product=${productCode}：${message}`);
+
+      // 失败原因要能自证：把实际请求的 URL 也打出来，
+      // 否则"超时"这种报错无法区分是地址配错、网络不通还是对端慢（踩过）。
+      const endpoint = this.client.endpoints().find((item) => item.code === productCode);
+      const detail = [
+        error && typeof error === 'object' && 'code' in error ? `code=${(error as { code?: string }).code}` : null,
+        endpoint?.baseUrl ? `url=${endpoint.baseUrl}/internal/products` : 'url=(未配置)',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      this.logger.error(`商品同步失败 product=${productCode} ${detail}：${message}`);
       return { product_code: productCode, fetched: 0, upserted: 0, deactivated: 0, status: 'failed', error: message };
     }
   }
