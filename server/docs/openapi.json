@@ -19,11 +19,11 @@
         },
         "responses": {
           "200": {
-            "description": "统一响应壳，data 为令牌 + 用户信息",
+            "description": "统一响应壳，data 为档案 + 令牌 + 用户摘要",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthTokenView"
+                  "$ref": "#/components/schemas/RegisterResultView"
                 }
               }
             }
@@ -52,11 +52,11 @@
         },
         "responses": {
           "200": {
-            "description": "统一响应壳，data 为令牌 + 用户信息",
+            "description": "统一响应壳，data 为令牌 + 用户摘要（含 role / status）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthTokenView"
+                  "$ref": "#/components/schemas/LoginResultView"
                 }
               }
             }
@@ -75,11 +75,11 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "统一响应壳，data 为新的令牌 + 用户信息",
+            "description": "统一响应壳，data 为新的令牌 + 用户摘要（含 role / status）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthTokenView"
+                  "$ref": "#/components/schemas/RefreshResultView"
                 }
               }
             }
@@ -1839,12 +1839,12 @@
           "password"
         ]
       },
-      "AuthUserView": {
+      "LoginUserView": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "description": "用户 UUID",
+            "description": "门户用户 UUID。**产品侧据此建 `portal_user_map` 映射**",
             "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
           },
           "username": {
@@ -1852,26 +1852,33 @@
             "description": "用户名",
             "example": "luobo"
           },
-          "phone": {
+          "role": {
             "type": "string",
-            "description": "手机号；未绑定时为空",
-            "example": null,
-            "nullable": true
+            "description": "角色：`user` 普通用户 · `admin` 管理员（产品侧**不要**据此放行自家管理功能）",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
           },
-          "created_at": {
-            "type": "string",
-            "description": "注册时间（UTC ISO 8601）",
-            "example": "2026-09-30T03:00:00Z"
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 正常 · `1` 禁用。**禁用账号登录时会直接返回 2004，走不到这里**；此字段用于二次确认",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
           }
         },
         "required": [
           "id",
           "username",
-          "phone",
-          "created_at"
+          "role",
+          "status"
         ]
       },
-      "AuthTokenView": {
+      "RegisterResultView": {
         "type": "object",
         "properties": {
           "access_token": {
@@ -1881,40 +1888,35 @@
           },
           "expires_in": {
             "type": "number",
-            "description": "access_token 有效期（秒）",
+            "description": "`access_token` 有效期（秒）",
             "example": 7200
-          },
-          "refresh_token": {
-            "type": "string",
-            "description": "刷新令牌。**同时通过 HttpOnly Cookie 下发**，前端通常不需要自己存；跨域时记得 `withCredentials: true`",
-            "example": "a1b2c3d4e5f6..."
           },
           "id": {
             "type": "string",
-            "description": "用户 UUID（顶层）",
+            "description": "用户 UUID（与 `user.id` 同值，顶层便于直接取）",
             "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
           },
           "username": {
             "type": "string",
-            "description": "用户名（顶层）",
+            "description": "用户名（与 `user.username` 同值）",
             "example": "luobo"
           },
           "phone": {
             "type": "string",
-            "description": "手机号（顶层）；未绑定时为空",
+            "description": "手机号；未绑定时为 null",
             "example": null,
             "nullable": true
           },
           "created_at": {
             "type": "string",
-            "description": "注册时间（顶层，UTC ISO 8601）",
+            "description": "注册时间（墙上时间，直接展示、勿做时区转换）",
             "example": "2026-09-30T03:00:00Z"
           },
           "user": {
-            "description": "登录态用户摘要（与顶层同值，便于新前端统一取值）",
+            "description": "登录态用户摘要（含 role / status）",
             "allOf": [
               {
-                "$ref": "#/components/schemas/AuthUserView"
+                "$ref": "#/components/schemas/LoginUserView"
               }
             ]
           }
@@ -1922,7 +1924,6 @@
         "required": [
           "access_token",
           "expires_in",
-          "refresh_token",
           "id",
           "username",
           "phone",
@@ -1947,6 +1948,62 @@
         "required": [
           "username",
           "password"
+        ]
+      },
+      "LoginResultView": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "访问令牌（RS256，默认 2 小时）。放在 `Authorization: Bearer <token>`",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6InBvcnRhbC0yMDI2LTEwIn0..."
+          },
+          "expires_in": {
+            "type": "number",
+            "description": "`access_token` 有效期（秒）",
+            "example": 7200
+          },
+          "user": {
+            "description": "登录态用户摘要（含 role / status）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoginUserView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "user"
+        ]
+      },
+      "RefreshResultView": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "访问令牌（RS256，默认 2 小时）。放在 `Authorization: Bearer <token>`",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6InBvcnRhbC0yMDI2LTEwIn0..."
+          },
+          "expires_in": {
+            "type": "number",
+            "description": "`access_token` 有效期（秒）",
+            "example": 7200
+          },
+          "user": {
+            "description": "登录态用户摘要（含 role / status）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoginUserView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "user"
         ]
       },
       "OkView": {

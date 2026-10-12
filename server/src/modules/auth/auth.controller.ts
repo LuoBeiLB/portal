@@ -14,7 +14,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwksService } from './jwks.service';
-import { AuthTokenView, CredentialResultView, OkView } from '../../common/dto/common.vo';
+import { LoginResultView, RefreshResultView, RegisterResultView } from './dto/auth.vo';
+import { CredentialResultView, OkView } from '../../common/dto/common.vo';
 
 export const REFRESH_COOKIE = 'refresh_token';
 /** 契约 §1.2：Path=/api/auth/refresh */
@@ -41,7 +42,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '统一响应壳，data 为令牌 + 用户信息', type: AuthTokenView })
+  @ApiOkResponse({ description: '统一响应壳，data 为档案 + 令牌 + 用户摘要', type: RegisterResultView })
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -76,7 +77,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '统一响应壳，data 为令牌 + 用户信息', type: AuthTokenView })
+  @ApiOkResponse({ description: '统一响应壳，data 为令牌 + 用户摘要（含 role / status）', type: LoginResultView })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -109,7 +110,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '统一响应壳，data 为新的令牌 + 用户信息', type: AuthTokenView })
+  @ApiOkResponse({ description: '统一响应壳，data 为新的令牌 + 用户摘要（含 role / status）', type: RefreshResultView })
   @Post('refresh')
   async refresh(
     @Req() request: Request,

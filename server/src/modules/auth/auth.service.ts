@@ -19,9 +19,25 @@ export interface AuthTokens {
   refresh_token: string;
 }
 
+/**
+ * 登录 / 注册 / 刷新 响应里的用户信息（三处形状保持一致）。
+ *
+ * `role` / `status` 是给**产品侧代理登录**用的（2026-10-12 新增）：
+ * 产品拿用户填的账号密码调 `POST /api/auth/login`，成功后需要立刻知道
+ * "这个账号是否可用、是什么角色"，否则还得再调一次接口查状态。
+ * 详见 `docs/09-契约v1.1差异与补充.md` 的「产品代理登录」一节。
+ */
+export interface AuthUserView {
+  id: string;
+  username: string;
+  role: UserRole;
+  /** 0 正常 / 1 禁用（契约 §0.6 的 2004 对应禁用态） */
+  status: UserStatus;
+}
+
 export interface AuthResult {
   tokens: AuthTokens;
-  user: { id: string; username: string };
+  user: AuthUserView;
 }
 
 @Injectable()
@@ -82,7 +98,7 @@ export class AuthService {
 
     return {
       tokens,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.username, role: user.role, status: user.status },
       profile: {
         id: user.id,
         username: user.username,
@@ -106,14 +122,14 @@ export class AuthService {
     if (!ok) throw new BizException(ErrorCode.BAD_CREDENTIALS);
 
     const tokens = await this.issueTokens(user.id, user.username, user.role);
-    return { tokens, user: { id: user.id, username: user.username } };
+    return { tokens, user: { id: user.id, username: user.username, role: user.role, status: user.status } };
   }
 
   /**
    * 刷新（契约 §1.3）：依赖 refresh Cookie。
    * refresh 不轮换、单设备语义（一期从简）。
    */
-  async refresh(rawToken: string | undefined): Promise<AuthTokens & { user: { id: string; username: string } }> {
+  async refresh(rawToken: string | undefined): Promise<AuthTokens & { user: AuthUserView }> {
     if (!rawToken) throw new BizException(ErrorCode.UNAUTHENTICATED);
 
     const session = await this.tokens.resolveRefreshToken(rawToken);
@@ -131,7 +147,7 @@ export class AuthService {
       access_token: access.accessToken,
       expires_in: access.expiresIn,
       refresh_token: rawToken,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.username, role: user.role, status: user.status },
     };
   }
 

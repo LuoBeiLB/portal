@@ -100,6 +100,21 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('返回 id（UUID 36 位）', typeof res.body?.data?.id === 'string' && res.body.data.id.length === 36, res.body?.data?.id);
     check('返回 access_token', typeof res.body?.data?.access_token === 'string', null);
     check('expires_in=7200（契约 §1.2）', res.body?.data?.expires_in === 7200, res.body?.data?.expires_in);
+    // ── user 摘要的字段（2026-10-12 补 role/status）─────────────────────
+    // 为什么要有这两条：产品侧**代理登录**（用户在产品登录页输门户账号密码、
+    // 产品后端调 /auth/login 验证）成功后，要立刻知道"这账号能不能用、什么角色"。
+    // 少了它们，产品还得再调一次接口查状态 —— 而这个字段一旦被误删，
+    // 产品侧会静默拿到 undefined，所以在这里断言。
+    check(
+      '**登录态 user 摘要含 role 与 status**（产品代理登录要用）',
+      res.body?.data?.user?.role === 'user' && res.body?.data?.user?.status === 0,
+      res.body?.data?.user,
+    );
+    check(
+      'user.id 与顶层 id 一致（同一用户）',
+      res.body?.data?.user?.id === res.body?.data?.id,
+      { topLevel: res.body?.data?.id, inUser: res.body?.data?.user?.id },
+    );
     check(
       'Set-Cookie 为 refresh_token，Path=/api/auth/refresh，HttpOnly，SameSite=Strict',
       res.setCookie.some(
@@ -140,6 +155,16 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
     check('登录成功 code=0', login.body.code === 0, login.body);
     accessToken = login.body?.data?.access_token;
     refreshCookie = login.setCookie.find((c) => c.startsWith('refresh_token='))?.split(';')[0] ?? '';
+    check(
+      '**登录响应也带 user.role / user.status**（产品代理登录读的就是它）',
+      login.body?.data?.user?.role === 'user' && login.body?.data?.user?.status === 0,
+      login.body?.data?.user,
+    );
+    check(
+      '登录响应顶层**不含** id/username（它们在 user 下 —— 与 Swagger 模型一致）',
+      login.body?.data?.id === undefined && login.body?.data?.username === undefined,
+      Object.keys(login.body?.data ?? {}),
+    );
 
     const noToken = await api('/api/wallet/balance');
     check('无 token 访问受保护接口 -> 1002', noToken.body.code === 1002, noToken.body);
@@ -633,6 +658,51 @@ async function api(path, { method = 'GET', body, token, headers = {}, cookie } =
         missing,
       );
       check('响应模型数量合理（*View 模型已生成）', Object.keys(doc.body?.components?.schemas ?? {}).filter((n) => n.endsWith('View')).length >= 20, Object.keys(doc.body?.components?.schemas ?? {}).filter((n) => n.endsWith('View')).length);
+    }
+
+    // ── 声明的字段 vs 真实返回的字段，逐个核对（2026-10-12 补）──────────────
+    // 病根：`AuthTokenView` 声明了顶层 `id`/`username`/`phone`/`created_at`，
+    // 但登录响应里这些在 `data.user` 下、顶层**根本没有** ——
+    // "有响应结构"不等于"响应结构是对的"，前端照着文档写会拿到 undefined。
+    // 这里拿真实调用去对，比人工审文档可靠。
+    //
+    // ⚠️ 解析要点：门户导出的 OpenAPI 里，接口的 200 schema **直接就是 `data` 的形状**
+    // （`{code,message,data}` 外壳由 ResponseInterceptor 统一加，不体现在每个接口的 schema 里）。
+    // 所以比对的是 `schema.properties` ↔ `响应.body.data`，不要再往里找一层 `data`。
+    {
+      const deref = (node) => {
+        const ref = node?.$ref;
+        if (!ref) return node ?? null;
+        return doc.body?.components?.schemas?.[ref.split('/').pop()] ?? null;
+      };
+      /** 取某接口 200 响应声明里的字段集合（含 allOf / $ref 展开） */
+      const declaredKeysOf = (path, method) => {
+        const raw = doc.body?.paths?.[path]?.[method]?.responses?.[200]?.content?.['application/json']?.schema;
+        const resolved = deref(raw);
+        const props = { ...(resolved?.properties ?? {}) };
+        for (const part of resolved?.allOf ?? []) {
+          Object.assign(props, deref(part)?.properties ?? {});
+        }
+        const keys = Object.keys(props);
+        return keys.length > 0 ? new Set(keys) : null;
+      };
+
+      const realLogin = await api('/api/auth/login', { method: 'POST', body: { username, password } });
+      const declaredLogin = declaredKeysOf('/api/auth/login', 'post');
+      const realLoginKeys = Object.keys(realLogin.body?.data ?? {});
+      const declaredButAbsent = declaredLogin ? [...declaredLogin].filter((k) => !realLoginKeys.includes(k)) : [];
+      const absentButReal = declaredLogin ? realLoginKeys.filter((k) => !declaredLogin.has(k)) : [];
+
+      check(
+        '**登录响应的 Swagger 声明与实际返回逐字段一致**',
+        declaredLogin !== null && declaredButAbsent.length === 0 && absentButReal.length === 0,
+        {
+          declared: declaredLogin ? [...declaredLogin] : null,
+          real: realLoginKeys,
+          declaredButAbsent,
+          realButNotDeclared: absentButReal,
+        },
+      );
     }
   }
 

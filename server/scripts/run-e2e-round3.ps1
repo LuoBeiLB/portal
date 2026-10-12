@@ -61,6 +61,12 @@ try {
     }
 
     Write-Host '=== 3. 重置商品缓存 ==='
+    # ⚠️ 必须让 reset 也打到**独立测试库**（2026-10-12 修）。
+    # 独立库是持久化的，上一次跑完商品还在里面；不清的话本脚本
+    # "等测试库出现商品"的循环会立刻通过 —— 于是**根本没触发新的同步**，
+    # 后面断言 `data_synced_at ≈ 现在` 就会因为读到上次的旧时间而失败。
+    # （DB_DATABASE 原先在第 4 步才设，所以这里清的是运营库，白清。）
+    $env:DB_DATABASE = $e2eDatabase
     & node scripts/reset-products.cjs
 
     Write-Host '=== 4. 起产品桩 + 门户服务 ==='

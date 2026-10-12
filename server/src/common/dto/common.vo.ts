@@ -39,60 +39,9 @@ export class BalanceView {
   updated_at!: string;
 }
 
-/** 契约 §1.1 / §1.2 登录态用户信息 */
-export class AuthUserView {
-  @ApiProperty({ description: '用户 UUID', example: '01a11e65-3a34-7578-95a7-ebfdd8cd731c' })
-  id!: string;
-
-  @ApiProperty({ description: '用户名', example: 'luobo' })
-  username!: string;
-
-  @ApiProperty({ type: String, description: '手机号；未绑定时为空', example: null, nullable: true })
-  phone!: string | null;
-
-  @ApiProperty({ description: '注册时间（UTC ISO 8601）', example: '2026-09-30T03:00:00Z' })
-  created_at!: string;
-}
-
-/**
- * 契约 §1.1 注册 / §1.2 登录响应。
- *
- * ⚠️ 字段是**顶层与 `user` 子对象并存**的：
- * `id` / `username` / `phone` / `created_at` 在顶层，`user` 里目前只有 `id` / `username`。
- * 前端**用顶层即可**（最全）；`user` 是为新前端统一取值预留的。
- */
-export class AuthTokenView {
-  @ApiProperty({
-    description: '访问令牌（RS256，默认 2 小时）。放在 `Authorization: Bearer <token>`',
-    example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6InBvcnRhbC0yMDI2LTEwIn0...',
-  })
-  access_token!: string;
-
-  @ApiProperty({ description: 'access_token 有效期（秒）', example: 7200 })
-  expires_in!: number;
-
-  @ApiProperty({
-    description:
-      '刷新令牌。**同时通过 HttpOnly Cookie 下发**，前端通常不需要自己存；跨域时记得 `withCredentials: true`',
-    example: 'a1b2c3d4e5f6...',
-  })
-  refresh_token!: string;
-
-  @ApiProperty({ description: '用户 UUID（顶层）', example: '01a11e65-3a34-7578-95a7-ebfdd8cd731c' })
-  id!: string;
-
-  @ApiProperty({ description: '用户名（顶层）', example: 'luobo' })
-  username!: string;
-
-  @ApiProperty({ type: String, description: '手机号（顶层）；未绑定时为空', example: null, nullable: true })
-  phone!: string | null;
-
-  @ApiProperty({ description: '注册时间（顶层，UTC ISO 8601）', example: '2026-09-30T03:00:00Z' })
-  created_at!: string;
-
-  @ApiProperty({ description: '登录态用户摘要（与顶层同值，便于新前端统一取值）', type: AuthUserView })
-  user!: AuthUserView;
-}
+// 认证接口（注册/登录/刷新）的响应模型已移到 `modules/auth/dto/auth.vo.ts`。
+// 原先这里的 `AuthTokenView` 声明了顶层 `id`/`username`/`phone`/`created_at`，
+// 但登录响应里这些字段在 `data.user` 下、顶层并没有 —— 与实现不符，2026-10-12 删除。
 
 /** 契约 §1.4 登出 / 修改密码等凭证类操作结果 */
 export class CredentialResultView extends OkView {
