@@ -188,7 +188,9 @@ describe('ProductSyncService.listForShop —— 目录新鲜度（catalog）', (
     const result = await service.listForShop();
     expect(result.catalog.stale).toBe(true);
     expect(result.catalog.last_sync_ok).toBe(true); // 同步本身没报错
-    expect(result.catalog.data_synced_at).toBe(old.toISOString()); // 数据停在这里
+    // `data_synced_at` 走 toWallIso：读驱动给的 UTC 分量（= 墙上面时间），
+    // 并按 API 约定**截到秒**（与其他时间字段一致，不输出毫秒）
+    expect(result.catalog.data_synced_at).toBe(old.toISOString().replace(/\.\d{3}Z$/, 'Z'));
   });
 
   it('从未同步过（无日志）-> stale=true 且字段为 null', async () => {

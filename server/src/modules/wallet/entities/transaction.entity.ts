@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 流水类型（契约 §3.2）：1 充值 2 扣费 3 退款 4 调账 */
 export enum TransactionType {
@@ -63,6 +63,6 @@ export class TransactionEntity {
   @Column({ name: 'detail', type: 'json', nullable: true, comment: '账单明细，产品传入时原样入' })
   detail!: Record<string, unknown> | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }

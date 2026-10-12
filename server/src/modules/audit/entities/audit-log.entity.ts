@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * 审计动作枚举（`a_audit_log.action`）。
@@ -73,7 +73,7 @@ export class AuditLogEntity {
   @Column({ name: 'ip', type: 'varchar', length: 45, nullable: true, comment: '客户端 IP（IPv6 最长 45）' })
   ip!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }
 

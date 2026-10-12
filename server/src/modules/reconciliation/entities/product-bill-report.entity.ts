@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * r_product_bill_report 产品账单上报（对账的数据来源）。
@@ -43,6 +43,6 @@ export class ProductBillReportEntity {
   @Column({ name: 'related_bill_no', type: 'varchar', length: 64, nullable: true, comment: '退款时指向的原单' })
   relatedBillNo!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }

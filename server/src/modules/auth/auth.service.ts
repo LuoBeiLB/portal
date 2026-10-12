@@ -51,10 +51,10 @@ export class AuthService {
 
     try {
       await this.dataSource.transaction(async (manager) => {
-        // 显式写入时间戳：DATETIME 列不依赖库侧 CURRENT_TIMESTAMP（它按会话时区生成，
-        // 会造成 8 小时偏移，详见 common/utc-date.transformer.ts）。
-        // 用 insert() 时 @BeforeInsert 钩子不会触发，所以这里必须显式给值。
-        const now = new Date();
+        // 时间戳**不在这里写**：`created_at` / `updated_at` 由 MySQL 按库侧
+        // `DEFAULT CURRENT_TIMESTAMP(3)` 生成（2026-10-12 统一口径）。
+        // 应用若显式给值，TypeORM 会序列化成 UTC 墙面时间，与库生成列差 8 小时 ——
+        // 详见 config/database.options.ts 顶部说明。
         await manager.insert(UserEntity, {
           id,
           username: dto.username,
@@ -64,10 +64,8 @@ export class AuthService {
           // 管理员只能由环境变量 bootstrap 或 POST /api/admin/admins 创建。
           role: UserRole.USER,
           status: UserStatus.NORMAL,
-          createdAt: now,
-          updatedAt: now,
         });
-        await manager.insert(WalletEntity, { userId: id, balanceCents: '0', updatedAt: now });
+        await manager.insert(WalletEntity, { userId: id, balanceCents: '0' });
       });
     } catch (error) {
       // 并发注册时唯一索引兜底：把 DB 冲突翻译成契约错误码
@@ -175,7 +173,9 @@ export class AuthService {
     }
 
     const passwordHash = await this.password.hash(newPassword);
-    await this.users.update({ id: user.id }, { passwordHash, updatedAt: new Date() });
+    // `updated_at` 交给库：列上有 ON UPDATE CURRENT_TIMESTAMP(3)，只要本次 UPDATE
+    // 改了别的列就会自动刷新（已实测，见 scripts/diag-onupdate.cjs）
+    await this.users.update({ id: user.id }, { passwordHash });
 
     const revoked = await this.tokens.revokeAllSessions(user.id);
     return { ok: true, revoked_sessions: revoked };

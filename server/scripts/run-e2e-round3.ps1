@@ -17,6 +17,10 @@ $server = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $server)
 $redisCli = Join-Path $repoRoot '.tools\redis\redis-cli.exe'
 
+# 专属端口与专属库：避免与开发机上正在运行的门户实例冲突（见第 1 步注释）
+$appPort = 3300
+$e2eDatabase = 'cloud_portal_e2e'
+
 function Stop-ListenerOnPort {
     param([int]$Port)
     $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
@@ -38,8 +42,14 @@ $exitCode = 1
 
 try {
     Write-Host '=== 1. 清理残留进程 ==='
-    Stop-ListenerOnPort -Port 3000
+    # ⚠️ 只清产品桩端口，**不再杀 3000**（2026-10-12 改）。
+    # 原先会 Stop-ListenerOnPort -Port 3000，但开发机上常跑着自己的门户实例，
+    # 杀它之后它可能被 npm/终端自动拉起来，重新占住 3000 ——
+    # 于是本脚本的 app 起不来（EADDRINUSE 静默失败），而健康检查探的是**那个实例**，
+    # 断言就会读到它连的真实云存储数据（价格 50000 而不是桩的 3000）。
+    # 现在用专属端口 3300 + 独立库 cloud_portal_e2e，与开发实例彻底互不干扰。
     Stop-ListenerOnPort -Port 8081
+    Stop-ListenerOnPort -Port $appPort
 
     Write-Host '=== 2. 检查 Redis ==='
     if (Test-Path $redisCli) {
@@ -67,6 +77,18 @@ try {
     # 限流验证在第 2 轮（那里的 15 段断言会先把配额清空再打满）。
     $env:PUBLIC_RATE_WINDOW = '60'
     $env:PUBLIC_RATE_MAX = '300'
+
+    # ⚠️ **必须用独立测试库**（2026-10-12 加的）：
+    # 开发者常在自己机器上跑着一个门户实例（读 .env → 真实云存储），它每 10 分钟
+    # 把 p_product / p_product_sync_log 覆盖成真实商品。而本脚本会先清空这两张表，
+    # 于是断言里"storage-500g = 3000 分"（桩价）会被真实价（50000）冲掉，
+    # 表现为"莫名其妙的价格不符失败"，且**跑之前完全看不出来**（踩过一整轮）。
+    # 用独立库后，本脚本与那个实例彻底隔离，也不再污染正在使用的数据。
+    $env:DB_DATABASE = $e2eDatabase
+    $env:APP_PORT = "$appPort"
+    Write-Host "  - 数据库: $env:DB_DATABASE（与 .env 里的运营库隔离）"
+    Write-Host "  - 端口:   $appPort（不用 3000，避免与开发实例抢端口）"
+
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-run.txt" `
         -RedirectStandardError "$env:TEMP\stub-run-err.txt" -PassThru -WindowStyle Hidden
@@ -76,32 +98,39 @@ try {
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\portal-run.txt" `
         -RedirectStandardError "$env:TEMP\portal-run-err.txt" -PassThru -WindowStyle Hidden
 
+    # 健康检查必须打在**自己的端口**上。
+    # 早先这里探的是 3000：一旦本脚本的 app 因 EADDRINUSE 起不来，
+    # 探到的其实是开发实例，会误判"就绪"并继续跑出一堆价格不符的假失败。
+    $baseUrl = "http://127.0.0.1:$appPort"
     $ready = $false
     for ($i = 0; $i -lt 25; $i++) {
         Start-Sleep -Seconds 1
         try {
-            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/healthz' -TimeoutSec 3
+            $health = Invoke-RestMethod -Uri "$baseUrl/api/healthz" -TimeoutSec 3
             if ($health.code -eq 0) { Write-Host "  - 门户就绪（$($i + 1)s）"; $ready = $true; break }
         } catch { }
     }
     if (-not $ready) {
         Get-Content "$env:TEMP\portal-run-err.txt" -ErrorAction SilentlyContinue |
             Select-Object -First 10 | ForEach-Object { Write-Host "    $_" }
-        throw '门户未能就绪'
+        throw "门户未能就绪（$baseUrl）"
     }
+    if ($app.HasExited) { throw "门户进程已退出（exit=$($app.ExitCode)），检查上面的 stderr" }
 
-    Write-Host '=== 5. 等待首次商品同步（cron 每分钟；首次启动应立即同步）==='
+    Write-Host '=== 5. 等待首次商品同步 ==='
+    # 不再靠"桩被调用过"判断（那只说明请求发出去了，商品未必已落库）。
+    # 直接查**测试库**里有没有商品：这才是断言真正依赖的状态。
     $synced = $false
-    for ($i = 0; $i -lt 24; $i++) {
-        Start-Sleep -Seconds 3
-        $calls = (Get-Content "$env:TEMP\stub-run.txt" -ErrorAction SilentlyContinue |
-            Select-String -Pattern 'internal/products').Count
-        if ($calls -gt 0) { Write-Host "  - 产品桩已被调用 $calls 次"; $synced = $true; break }
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 2
+        $count = & node -e "const m=require('mysql2/promise');m.createConnection({host:process.env.DB_HOST||'127.0.0.1',user:process.env.DB_USERNAME||'root',password:process.env.DB_PASSWORD||'root',database:process.env.DB_DATABASE}).then(async c=>{const [r]=await c.query('SELECT COUNT(*) n FROM p_product WHERE is_active=1');console.log(r[0].n);await c.end()}).catch(()=>console.log('0'))"
+        if ([int]$count -gt 0) { Write-Host "  - 测试库已有 $count 条在售商品"; $synced = $true; break }
     }
-    if (-not $synced) { Write-Warning '  - 等待超时，商品同步可能未发生' }
+    if (-not $synced) { throw '等待超时：测试库里始终没有商品（同步没成功，继续跑只会得到一串假失败）' }
 
     Write-Host ''
     Write-Host '=== 6. 执行第 3 轮端到端 ==='
+    $env:E2E_BASE_URL = $baseUrl
     & node scripts/e2e-round3.cjs
     $exitCode = $LASTEXITCODE
 } finally {

@@ -49,7 +49,7 @@ export class AuditService {
         // json 列在 TypeORM 的 _QueryDeepPartialEntity 上类型较窄，这里显式断言
         detail: (input.detail ?? null) as never,
         ip: input.ip ?? null,
-        createdAt: new Date(),
+        // `created_at` 不显式写：由库侧 DEFAULT CURRENT_TIMESTAMP(3) 生成（2026-10-12 统一口径）
       });
     } catch (error) {
       this.logger.warn(

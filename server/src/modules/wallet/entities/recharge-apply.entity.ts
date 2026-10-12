@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 充值单状态（契约 §3.3）：0 待核销 1 已到账 2 驳回 */
 export enum RechargeStatus {
@@ -47,6 +47,6 @@ export class RechargeApplyEntity {
   @Column({ name: 'reject_reason', type: 'varchar', length: 255, nullable: true })
   rejectReason!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }

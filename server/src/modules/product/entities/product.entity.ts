@@ -1,4 +1,4 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 计费模式（契约 §2.1）：1 包周期（下单即扣） 2 按量（开通 0 元单，后付费由产品出账） */
 export enum BillingMode {
@@ -51,6 +51,12 @@ export class ProductEntity {
   @Column({ name: 'synced_at', type: 'datetime', precision: 3, comment: '最近一次同步时间' })
   syncedAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
+  @Column({
+    name: 'updated_at',
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
   updatedAt!: Date;
 }

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import { BizException, ErrorCode } from '../../common/error-code';
+import { instantToWallIso } from '../../common/local-time';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { ProductEntity } from '../product/entities/product.entity';
 import { ProductSyncService } from '../product/product-sync.service';
@@ -346,8 +347,11 @@ export class OrderService {
       order_no: order.orderNo,
       total_cents: Number(order.totalCents),
       status: order.status,
+      // `created_at` 是**库生成**（库里已是墙上时间）→ iso() 读 UTC 分量即可
       created_at: iso(order.createdAt),
-      paid_at: order.paidAt ? iso(order.paidAt) : null,
+      // `paid_at` 是**应用写**的（库里 UTC 墙面）→ 要补本地偏移才是墙上时间。
+      // 两者对外都表现为"墙上时间"，前端统一直接展示。详见 common/local-time.ts
+      paid_at: order.paidAt ? instantToWallIso(order.paidAt) : null,
       items: items.map((item) => ({
         item_id: item.id,
         product_code: item.productCode,
@@ -357,7 +361,8 @@ export class OrderService {
         price_cents: Number(item.priceCents),
         status: item.status,
         instance_id: item.instanceId,
-        expire_at: item.expireAt ? iso(item.expireAt) : null,
+        // 同上：`expire_at` 由产品回传后应用写入，属"应用写"列
+        expire_at: item.expireAt ? instantToWallIso(item.expireAt) : null,
         fail_reason: item.failReason,
         refund_bill_no: refundOf.get(item.id)?.billNo ?? null,
         refunded_at: refundOf.get(item.id)?.refundedAt ?? null,

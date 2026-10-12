@@ -144,10 +144,27 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
       check('**同步正常时 catalog.stale=false**', catalog?.stale === false, catalog);
       check('catalog.last_sync_ok=true', catalog?.last_sync_ok === true, catalog);
       check('catalog.last_error 为空', catalog?.last_error === null, catalog?.last_error);
+      // ⚠️ 时间字段的坑（2026-10-12 踩过）：接口返回的是**墙上时间**（那个 `Z` 只是占位），
+      // 不能直接跟 `new Date()` 比 —— `new Date("11:28Z")` 比本地 11:28 晚 8 小时，
+      // 会误判成"未来的时间"。正确做法：把"现在的本地墙上时间"也拼成同样形状再比。
+      const wallNow = () => {
+        const d = new Date();
+        const pad = (n, w = 2) => String(n).padStart(w, '0');
+        return new Date(
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+            `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.000Z`,
+        );
+      };
       check(
-        'catalog.data_synced_at 是 UTC ISO 且不晚于现在',
-        /^\d{4}-\d{2}-\d{2}T/.test(String(catalog?.data_synced_at ?? '')) && new Date(catalog.data_synced_at) <= new Date(),
-        catalog?.data_synced_at,
+        '**catalog.data_synced_at 是当前墙上时间（±5 分钟）**',
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(String(catalog?.data_synced_at ?? '')) &&
+          Math.abs(new Date(catalog.data_synced_at).getTime() - wallNow().getTime()) < 5 * 60_000,
+        { data_synced_at: catalog?.data_synced_at, wallNow: wallNow().toISOString() },
+      );
+      check(
+        '**catalog.last_sync_at 也是当前墙上时间（±5 分钟）**',
+        Math.abs(new Date(catalog?.last_sync_at).getTime() - wallNow().getTime()) < 5 * 60_000,
+        { last_sync_at: catalog?.last_sync_at, wallNow: wallNow().toISOString() },
       );
     }
   }

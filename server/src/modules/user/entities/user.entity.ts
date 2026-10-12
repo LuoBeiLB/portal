@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 import { UserRole, UserStatus } from './user-status.enum';
 
@@ -46,9 +46,15 @@ export class UserEntity {
   })
   status!: UserStatus;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
+  @Column({
+    name: 'updated_at',
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
   updatedAt!: Date;
 }

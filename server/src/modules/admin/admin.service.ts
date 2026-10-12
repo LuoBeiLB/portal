@@ -137,11 +137,13 @@ export class AdminService {
     }
 
     await this.dataSource.transaction(async (manager) => {
-      await manager.update(UserEntity, { id: userId }, { status: target, updatedAt: new Date() });
+      // `updated_at` 不显式写：列上有 ON UPDATE CURRENT_TIMESTAMP(3)，
+      // 本次 UPDATE 改了 status 就会自动刷新（2026-10-12 统一时间口径）
+      await manager.update(UserEntity, { id: userId }, { status: target });
       await manager.update(
         WalletEntity,
         { userId },
-        { status: target === UserStatus.DISABLED ? WalletStatus.FROZEN : WalletStatus.NORMAL, updatedAt: new Date() },
+        { status: target === UserStatus.DISABLED ? WalletStatus.FROZEN : WalletStatus.NORMAL },
       );
     });
 
@@ -335,8 +337,8 @@ export class AdminService {
 
     const id = uuidv7();
     const passwordHash = await this.passwords.hash(input.password);
-    const now = new Date();
 
+    // 时间戳不显式写：由库侧 DEFAULT CURRENT_TIMESTAMP(3) 生成（2026-10-12 统一口径）
     await this.dataSource.transaction(async (manager) => {
       await manager.insert(UserEntity, {
         id,
@@ -345,11 +347,9 @@ export class AdminService {
         passwordHash,
         role: UserRole.ADMIN,
         status: UserStatus.NORMAL,
-        createdAt: now,
-        updatedAt: now,
       });
       // 管理员也可能消费（例如自己买存储），建钱包保持与普通用户一致
-      await manager.insert(WalletEntity, { userId: id, balanceCents: '0', updatedAt: now });
+      await manager.insert(WalletEntity, { userId: id, balanceCents: '0' });
     });
 
     return { id, username: input.username };
@@ -392,7 +392,8 @@ export class AdminService {
       }
     }
 
-    await this.users.update({ id: targetId }, { status: next, updatedAt: new Date() });
+    // `updated_at` 交给库（ON UPDATE CURRENT_TIMESTAMP(3)）
+    await this.users.update({ id: targetId }, { status: next });
     const revoked = next === UserStatus.DISABLED ? await this.tokens.revokeAllSessions(targetId) : 0;
 
     return { ok: true, status: next, revoked_sessions: revoked };
@@ -413,7 +414,8 @@ export class AdminService {
     }
 
     const passwordHash = await this.passwords.hash(newPassword);
-    await this.users.update({ id: targetId }, { passwordHash, updatedAt: new Date() });
+    // `updated_at` 交给库（ON UPDATE CURRENT_TIMESTAMP(3)）
+    await this.users.update({ id: targetId }, { passwordHash });
     const revoked = await this.tokens.revokeAllSessions(targetId);
 
     return { ok: true, revoked_sessions: revoked };
@@ -429,9 +431,9 @@ export class AdminService {
   async bootstrapAdmin(username: string, password: string, phone?: string): Promise<'created' | 'updated'> {
     const existing = await this.users.findOne({ where: { username } });
     const passwordHash = await this.passwords.hash(password);
-    const now = new Date();
 
     if (existing) {
+      // 时间戳不显式写：由库侧默认值与 ON UPDATE 负责
       await this.users.update(
         { id: existing.id },
         {
@@ -439,13 +441,12 @@ export class AdminService {
           role: UserRole.ADMIN,
           status: UserStatus.NORMAL,
           phone: phone ?? existing.phone,
-          updatedAt: now,
         },
       );
       // 保证有钱包（历史数据或手工建的管理员可能没有）
       const wallet = await this.wallets.findOne({ where: { userId: existing.id } });
       if (!wallet) {
-        await this.wallets.insert({ userId: existing.id, balanceCents: '0', updatedAt: now });
+        await this.wallets.insert({ userId: existing.id, balanceCents: '0' });
       }
       return 'updated';
     }
@@ -459,10 +460,8 @@ export class AdminService {
         passwordHash,
         role: UserRole.ADMIN,
         status: UserStatus.NORMAL,
-        createdAt: now,
-        updatedAt: now,
       });
-      await manager.insert(WalletEntity, { userId: id, balanceCents: '0', updatedAt: now });
+      await manager.insert(WalletEntity, { userId: id, balanceCents: '0' });
     });
     return 'created';
   }

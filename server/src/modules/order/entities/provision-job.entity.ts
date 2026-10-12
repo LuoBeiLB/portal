@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 开通任务状态 */
 export enum ProvisionJobStatus {
@@ -75,9 +75,15 @@ export class ProvisionJobEntity {
   @Column({ name: 'last_error', type: 'varchar', length: 512, nullable: true })
   lastError!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
+  @Column({
+    name: 'updated_at',
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
   updatedAt!: Date;
 }

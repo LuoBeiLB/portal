@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { BizException, ErrorCode } from '../../common/error-code';
+import { instantToWallIso, toWallIso } from '../../common/local-time';
 import { ProductEndpoint } from '../../config/configuration';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { BillingMode, ProductEntity } from './entities/product.entity';
@@ -240,7 +241,6 @@ export class ProductSyncService {
     productCode: string,
     remote: RemoteProduct[],
   ): Promise<{ upserted: number; deactivated: number }> {
-    const now = new Date();
     const seen: string[] = [];
 
     for (const item of remote) {
@@ -258,7 +258,8 @@ export class ProductSyncService {
         periodDays: item.period_days === undefined || item.period_days === null ? null : Number(item.period_days),
         stock: item.stock === undefined || item.stock === null ? null : Number(item.stock),
         isActive: 1,
-        syncedAt: now,
+        // `syncedAt` 不显式写：列上有 DEFAULT CURRENT_TIMESTAMP(3) 与
+        // ON UPDATE CURRENT_TIMESTAMP(3)，由库负责（2026-10-12 统一时间口径）
       };
 
       if (existing) {
@@ -274,8 +275,7 @@ export class ProductSyncService {
     const stale = existingRows.filter((row) => row.isActive === 1 && !seen.includes(row.skuId));
     if (stale.length > 0) {
       for (const row of stale) {
-        row.isActive = 0;
-        row.syncedAt = now;
+        row.isActive = 0; // syncedAt 交给库的 ON UPDATE 刷新
       }
       await this.products.save(stale);
     }
@@ -340,10 +340,13 @@ export class ProductSyncService {
 
     return {
       stale: neverSynced || tooOld || lastRow.status === 1,
-      last_sync_at: lastRow?.startedAt ? new Date(lastRow.startedAt).toISOString() : null,
+      // `started_at` 是**应用写**的列（库里 UTC 墙面）→ 要转成墙上时间；
+      // `synced_at` 是**库生成**的（库里已是墙上时间）→ 读 UTC 分量即可。
+      // 两者对外统一表现为"墙上时间"。详见 common/local-time.ts
+      last_sync_at: instantToWallIso(lastRow?.startedAt ?? null),
       last_sync_ok: lastRow ? lastRow.status === 0 : null,
       last_error: lastRow?.errorMsg ?? null,
-      data_synced_at: dataSyncedAt ? dataSyncedAt.toISOString() : null,
+      data_synced_at: toWallIso(dataSyncedAt),
     };
   }
 

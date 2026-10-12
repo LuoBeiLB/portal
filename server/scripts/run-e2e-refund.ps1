@@ -32,8 +32,11 @@ $exitCode = 1
 
 try {
     Write-Host '=== 1. 清理残留进程 ==='
-    Stop-ListenerOnPort -Port 3000
+    # 只清产品桩端口，**不杀 3000**：开发机上常跑着自己的门户实例，
+    # 杀它之后可能被自动拉起并重新占住端口，导致本脚本的 app 起不来
+    # 而健康检查探到的是那个实例（会跑出一串假失败）。详见 run-e2e-round3.ps1 注释。
     Stop-ListenerOnPort -Port 8081
+    Stop-ListenerOnPort -Port 3301
 
     Write-Host '=== 2. 检查 Redis ==='
     if (Test-Path $redisCli) {
@@ -54,9 +57,12 @@ try {
     $env:STUB_PRODUCT_INTERNAL_KEY = 'stub-storage-key'
     $env:PRODUCT_PHONE_INTERNAL_KEY = 'e2e-inbound-only-phone-key'
     $env:PRODUCT_PHONE_BASE_URL = ''
-    # 与 run-e2e-round3.ps1 一致：公开接口限流阈值调小，便于触发
+    # 与 run-e2e-round3.ps1 一致：公开接口限流阈值调大（本套不验证限流）
     $env:PUBLIC_RATE_WINDOW = '60'
-    $env:PUBLIC_RATE_MAX = '5'
+    $env:PUBLIC_RATE_MAX = '300'
+    # 专属端口 + 独立测试库：与开发机上运行的实例彻底隔离（同 run-e2e-round3.ps1）
+    $env:APP_PORT = '3301'
+    $env:DB_DATABASE = 'cloud_portal_e2e'
     $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-refund.txt" `
         -RedirectStandardError "$env:TEMP\stub-refund-err.txt" -PassThru -WindowStyle Hidden
@@ -70,14 +76,14 @@ try {
     for ($i = 0; $i -lt 25; $i++) {
         Start-Sleep -Seconds 1
         try {
-            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/healthz' -TimeoutSec 3
+            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3301/api/healthz' -TimeoutSec 3
             if ($health.code -eq 0) { Write-Host "  · 门户就绪（$($i + 1)s）"; $ready = $true; break }
         } catch { }
     }
     if (-not $ready) {
         Get-Content "$env:TEMP\portal-refund-err.txt" -ErrorAction SilentlyContinue |
             Select-Object -First 10 | ForEach-Object { Write-Host "    $_" }
-        throw '门户未能就绪'
+        throw '门户未能就绪（http://127.0.0.1:3301）'
     }
 
     Write-Host '=== 5. 等待商品同步 ==='
@@ -90,6 +96,7 @@ try {
 
     Write-Host ''
     Write-Host '=== 6. 执行退款路径验证 ==='
+    $env:E2E_BASE_URL = 'http://127.0.0.1:3301'
     & node scripts/e2e-refund.cjs
     $exitCode = $LASTEXITCODE
 } finally {

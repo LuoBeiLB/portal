@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 订单项状态（契约 §2.3）：0 待支付 1 已支付 2 开通成功 3 失败待退款 4 已退款 */
 export enum OrderItemStatus {
@@ -77,6 +77,6 @@ export class OrderItemEntity {
   })
   failReason!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }

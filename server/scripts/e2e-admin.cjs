@@ -418,6 +418,81 @@ const stamp = Date.now().toString().slice(-9);
     check('**导出被记入审计日志**', (exportLogs.data?.total ?? 0) >= 1, exportLogs.data?.total);
   }
 
+  console.log('\n=== 11. 时间口径统一（2026-10-12 定稿）===');
+  {
+    // 规则：接口返回的时间字符串 = 用户该看到的**墙上时间**，前端直接展示、不做时区转换。
+    //
+    // ⚠️ 断言写法容易踩坑：接口给的是 `2026-10-12T10:42:03Z`，这里的 `Z` 只是占位
+    // （库里存的就是墙上时间）。所以**不能**直接跟 `new Date()` 比 —— `new Date("10:42Z")`
+    // 是 UTC 10:42，而本地墙上 10:42 对应 UTC 02:42，会白白差 8 小时。
+    // 正确做法：把"现在的本地墙上时间"也拼成同样的 `...Z` 形状再比。
+    const wallNow = () => {
+      const d = new Date();
+      const pad = (n, w = 2) => String(n).padStart(w, '0');
+      return new Date(
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+          `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.000Z`,
+      );
+    };
+    const minutesApart = (iso, reference) => Math.abs(new Date(iso).getTime() - reference.getTime()) / 60_000;
+
+    // ① 库生成列（u_user.created_at）：刚注册的用户，created_at 应等于当前墙上时间
+    const fresh = await api('/api/auth/register', {
+      method: 'POST',
+      body: { username: `tzchk_${Date.now().toString().slice(-9)}`, password: 'Ab12345678' },
+    });
+    check(
+      '**库生成列（u_user.created_at）返回的是当前墙上时间**',
+      minutesApart(fresh.data?.created_at, wallNow()) < 5,
+      { created_at: fresh.data?.created_at, wallNow: wallNow().toISOString() },
+    );
+
+    // ② 应用写列（o_order.paid_at）：刚支付的订单，paid_at 也应等于当前墙上时间
+    const tzToken = fresh.data?.access_token;
+    const products = await api('/api/shop/products?product_code=storage');
+    const sku = (products.data?.list ?? []).find((p) => Number(p.price_cents) > 0);
+    if (sku) {
+      const apply = await api('/api/wallet/recharge/apply', {
+        method: 'POST',
+        token: tzToken,
+        body: { amount_cents: 100000, remark: 'e2e 时间口径校验' },
+      });
+      await api(`/api/admin/recharges/${apply.data?.apply_id}/confirm`, {
+        method: 'POST',
+        token: adminToken,
+        body: { reject: false },
+      });
+      const order = await api('/api/shop/orders', {
+        method: 'POST',
+        token: tzToken,
+        body: { items: [{ product_code: sku.product_code, sku_id: sku.sku_id, quantity: 1 }] },
+      });
+      const paid = await api(`/api/shop/orders/${order.data?.order_id}/pay`, { method: 'POST', token: tzToken });
+      const paidAt = paid.data?.paid_at;
+      check(
+        '**应用写列（o_order.paid_at）返回的也是当前墙上时间**',
+        paidAt !== null && paidAt !== undefined && minutesApart(paidAt, wallNow()) < 5,
+        { paid_at: paidAt, wallNow: wallNow().toISOString() },
+      );
+      check(
+        '同一订单里 created_at 与 paid_at 相差在 1 分钟内（不再差 8 小时）',
+        Math.abs(new Date(paid.data?.created_at).getTime() - new Date(paidAt).getTime()) < 60_000,
+        { created_at: paid.data?.created_at, paid_at: paidAt },
+      );
+    } else {
+      check('（跳过 paid_at 断言）商品目录为空', true, null);
+    }
+
+    // ③ 审计日志（库生成列）：刚写的日志，时间也应是当前墙上时间
+    const logs = await api('/api/admin/audit-logs?page=1&size=1', { token: adminToken });
+    const newest = logs.data?.list?.[0];
+    check(
+      '**审计日志 created_at 是当前墙上时间**',
+      newest ? minutesApart(newest.created_at, wallNow()) < 5 : false,
+      { created_at: newest?.created_at, wallNow: wallNow().toISOString() },
+    );
+  }
+
   console.log('\n' + '='.repeat(70));
   console.log(`通过 ${passed} 项，失败 ${failed} 项`);
   if (failures.length > 0) {

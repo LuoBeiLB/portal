@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 import { WalletStatus } from '../../user/entities/user-status.enum';
 
@@ -27,6 +27,12 @@ export class WalletEntity {
   })
   status!: WalletStatus;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
+  @Column({
+    name: 'updated_at',
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
   updatedAt!: Date;
 }

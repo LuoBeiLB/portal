@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** 订单状态（契约 §2.3）：0 待支付 1 部分成功 2 全部成功 3 全部失败 */
 export enum OrderStatus {
@@ -36,7 +36,7 @@ export class OrderEntity {
   })
   status!: OrderStatus;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 
   @Column({ name: 'paid_at', type: 'datetime', precision: 3, nullable: true })
@@ -51,6 +51,12 @@ export class OrderEntity {
   })
   payingAt!: Date | null;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime', precision: 3 })
+  @Column({
+    name: 'updated_at',
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
   updatedAt!: Date;
 }

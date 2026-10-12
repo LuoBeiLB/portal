@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * r_reconciliation 日对账结果（契约 §6 `GET /admin/reconciliation/daily`）。
@@ -46,6 +46,6 @@ export class ReconciliationEntity {
   @Column({ name: 'status', type: 'varchar', length: 16, default: 'ok', comment: 'ok 平账 / diff 有差异' })
   status!: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 3 })
+  @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;
 }

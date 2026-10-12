@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { BizException, ErrorCode } from '../../common/error-code';
+import { instantToWallIso } from '../../common/local-time';
 import { toIso } from '../auth/auth.service';
 import { WalletStatus } from '../user/entities/user-status.enum';
 import { RechargeApplyDto, TransactionQueryDto } from './dto/wallet.dto';
@@ -252,7 +253,9 @@ export class WalletService {
         remark: row.remark,
         status: row.status,
         created_at: toIso(row.createdAt),
-        reviewed_at: toIso(row.reviewedAt),
+        // `reviewed_at` 是**应用写**的（核销时给 new Date()），库里 UTC 墙面 → 转墙上时间；
+        // `created_at` 是库生成的（已是墙上时间）→ toIso 即可。详见 common/local-time.ts
+        reviewed_at: instantToWallIso(row.reviewedAt),
         // 经办人：reviewed_by 存的是管理员 user_id，这里补上用户名便于管理端展示
         reviewed_by: row.reviewedBy,
         reviewed_by_username: row.reviewedBy ? (userMap.get(row.reviewedBy)?.username ?? null) : null,
