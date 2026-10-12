@@ -7,6 +7,7 @@ import { PortalConfigService } from '../../config/portal-config.service';
 import { ProductEntity } from '../product/entities/product.entity';
 import { ProductSyncService } from '../product/product-sync.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { TransactionEntity } from '../wallet/entities/transaction.entity';
 import { CreateOrderDto, OrderItemInputDto } from './dto/order.dto';
 import { OrderItemEntity, OrderItemStatus } from './entities/order-item.entity';
 import { OrderEntity, OrderStatus } from './entities/order.entity';
@@ -33,6 +34,10 @@ export interface OrderItemView {
   instance_id: string | null;
   expire_at: string | null;
   fail_reason: string | null;
+  /** 退款流水号（`refund:{item_id}:{attempt}`）；非退款项为 null（2026-10-10 新增，D 组 D-F3） */
+  refund_bill_no: string | null;
+  /** 退款记账时间（= 实际到账时间）；非退款项为 null */
+  refunded_at: string | null;
 }
 
 export interface PayResult extends OrderView {
@@ -139,14 +144,21 @@ export class OrderService {
     return (await this.buildView(this.orders.manager, orderId)) as OrderView;
   }
 
-  /** 我的订单列表（契约外补充；前端做"我的订单"页要用） */
+  /**
+   * 我的订单列表（契约外补充；前端做"我的订单"页要用）。
+   *
+   * `status` 为可选的订单状态筛选（2026-10-10 补上，C 组前端需求 P0）。
+   * 此前该参数被忽略：传任何值都返回全部，前端四个 tab 点了没反应，
+   * 只能改成"拉满 100 条本地筛"，订单多了就不全。`total` 同步变成筛选后的数量。
+   */
   async listMine(
     userId: string,
     page: number,
     size: number,
+    status?: number,
   ): Promise<{ list: OrderView[]; total: number; page: number; size: number }> {
     const [rows, total] = await this.orders.findAndCount({
-      where: { userId },
+      where: status === undefined ? { userId } : { userId, status },
       order: { id: 'DESC' },
       skip: (page - 1) * size,
       take: size,
@@ -299,6 +311,36 @@ export class OrderService {
     const products = skuIds.length ? await manager.find(ProductEntity, { where: { skuId: In(skuIds) } }) : [];
     const nameOf = new Map(products.map((product) => [`${product.productCode}:${product.skuId}`, product.name]));
 
+    /**
+     * 退款项的流水关联（2026-10-10 新增，D 组 D-F3）。
+     *
+     * 为什么能免字段查出来：退款流水的 `bill_no` 就是 `refund:{item_id}:{attempt}`，
+     * 与原扣费单 `order:{order_id}:item:{item_id}` 一一对应。
+     * 前端据此可以从订单详情直接跳到"这笔退款在哪"，不用去流水页翻。
+     *
+     * `refunded_at` 取退款的**记账时间**（= 实际到账时间），不是失败时间。
+     */
+    const refundedItems = items.filter((item) => item.status === OrderItemStatus.REFUNDED);
+    const refundOf = new Map<string, { billNo: string; refundedAt: string }>();
+    if (refundedItems.length > 0) {
+      const patterns = refundedItems.map((item) => `refund:${item.id}:%`);
+      const refundTxns = await manager
+        .createQueryBuilder(TransactionEntity, 't')
+        .where(
+          patterns.map((_, index) => `t.bill_no LIKE :p${index}`).join(' OR '),
+          Object.fromEntries(patterns.map((pattern, index) => [`p${index}`, pattern])),
+        )
+        .orderBy('t.id', 'DESC')
+        .getMany();
+      for (const txn of refundTxns) {
+        // refund:{item_id}:{attempt} → 取 item_id；同一项多次尝试时保留最新一条（上面按 id DESC）
+        const itemId = txn.billNo.split(':')[1];
+        if (itemId && !refundOf.has(itemId)) {
+          refundOf.set(itemId, { billNo: txn.billNo, refundedAt: iso(txn.createdAt) });
+        }
+      }
+    }
+
     return {
       order_id: order.id,
       order_no: order.orderNo,
@@ -317,6 +359,8 @@ export class OrderService {
         instance_id: item.instanceId,
         expire_at: item.expireAt ? iso(item.expireAt) : null,
         fail_reason: item.failReason,
+        refund_bill_no: refundOf.get(item.id)?.billNo ?? null,
+        refunded_at: refundOf.get(item.id)?.refundedAt ?? null,
       })),
     };
   }

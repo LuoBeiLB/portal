@@ -3,9 +3,19 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } f
 import { Request } from 'express';
 
 import { AdminGuard } from '../../common/admin.guard';
+import {
+  AdminAccountListView,
+  AdminCreatedView,
+  AdminUserListView,
+  AdminVerifyView,
+  AuditLogListView,
+  CredentialResultView,
+  StatusChangeView,
+} from '../../common/dto/common.vo';
 import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
+import { AdminTransactionListView } from '../order/dto/order.vo';
 import { AdminService } from './admin.service';
 import {
   AdminTransactionQueryDto,
@@ -44,6 +54,7 @@ export class AdminPortalController {
       '返回当前操作人与角色。**用于管理端登录页**：拿到 `code: 0` 即凭据有效。\n\n' +
       '非管理员调用返回 `1004`，未登录返回 `1002`。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为登录态校验结果', type: AdminVerifyView })
   @Get('auth/verify')
   async verify(@CurrentUser() user: AuthUser): Promise<Record<string, unknown>> {
     return { ...(await this.admin.verify({ id: user.id, username: user.username, role: user.role })) };
@@ -58,6 +69,7 @@ export class AdminPortalController {
       '`keyword` 匹配用户名或手机号；`status` 可过滤。响应带余额与累计充值/消费，' +
       '`recharge_total_cents` / `consume_total_cents` 为 type=1 / type=2 的流水合计。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为用户列表 + 分页', type: AdminUserListView })
   @Get('users')
   async listUsers(@Query() query: AdminUserQueryDto): Promise<Record<string, unknown>> {
     return {
@@ -79,7 +91,7 @@ export class AdminPortalController {
       '操作会写入审计日志（`user_disable` / `user_enable`），操作人取自当前登录的管理员。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为变更后状态', type: StatusChangeView })
   @Post('users/:id/status')
   async setUserStatus(
     @CurrentUser() user: AuthUser,
@@ -110,6 +122,7 @@ export class AdminPortalController {
       '支持 `type` / `product_code` / `user_id` / `keyword`（用户名或手机号）以及\n' +
       '`start_date` / `end_date`（**UTC 自然日，含当日**）过滤 —— 管理端最常用的"查某天的流水"。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为流水列表 + 分页', type: AdminTransactionListView })
   @Get('transactions')
   async listTransactions(@Query() query: AdminTransactionQueryDto): Promise<Record<string, unknown>> {
     return {
@@ -136,6 +149,7 @@ export class AdminPortalController {
       '⚠️ 能力边界：能追到"哪个管理员在什么时候做了什么"，但**前提是每个管理员用自己的账号**。\n' +
       '如果多人共用一个账号，审计就退回不可追溯。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为日志列表 + 分页', type: AuditLogListView })
   @Get('audit-logs')
   async listAuditLogs(@Query() query: AuditLogQueryDto): Promise<Record<string, unknown>> {
     return {
@@ -157,6 +171,7 @@ export class AdminPortalController {
     summary: '管理员列表',
     description: '列出全部管理员（含已禁用）。首个管理员由环境变量 bootstrap 创建，其余用本组接口创建。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为管理员列表（不分页）', type: AdminAccountListView })
   @Get('admins')
   async listAdmins(): Promise<Record<string, unknown>> {
     return { ...(await this.admin.listAdmins()) };
@@ -170,7 +185,7 @@ export class AdminPortalController {
       '操作写入审计日志。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为新建管理员', type: AdminCreatedView })
   @Post('admins')
   async createAdmin(
     @CurrentUser() user: AuthUser,
@@ -203,7 +218,7 @@ export class AdminPortalController {
       '错误：`4001` 管理员不存在 · `4002` 状态未变化 · `1004` 违反上述守卫。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为变更后状态与吊销会话数', type: StatusChangeView })
   @Post('admins/:id/status')
   async setAdminStatus(
     @CurrentUser() user: AuthUser,
@@ -233,7 +248,7 @@ export class AdminPortalController {
       '错误：`4001` 管理员不存在 · `1001` 目标是自己（请用改密接口）。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 含被吊销的会话数', type: CredentialResultView })
   @Post('admins/:id/password')
   async resetAdminPassword(
     @CurrentUser() user: AuthUser,

@@ -44,7 +44,9 @@ export class DeductDto {
   amount_cents!: number;
 
   @ApiPropertyOptional({
-    description: '账单明细，原样写入流水供用户查看',
+    description: '账单明细，原样写入流水供用户查看。**自由结构**，门户不解析',
+    type: 'object',
+    additionalProperties: true,
     example: { plan: '续费·标准版', period: '30天', instance_id: 'st-0001' },
   })
   @IsOptional()

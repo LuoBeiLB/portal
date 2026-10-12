@@ -1,8 +1,9 @@
-import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { HealthView, MetaView } from './common/dto/common.vo';
 import { Public } from './common/public.decorator';
 import { PortalConfigService } from './config/portal-config.service';
 
@@ -26,6 +27,7 @@ export class AppController {
     summary: '探活（运维）',
     description: '供 nginx / 容器探活。`data.status`：ok=数据库可达；degraded=数据库不可达。无需鉴权。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为探活结果', type: HealthView })
   @Get('healthz')
   async health(): Promise<Record<string, unknown>> {
     let database = 'down';
@@ -47,6 +49,7 @@ export class AppController {
     summary: '服务元信息（运维）',
     description: '返回服务名、契约版本、JWT issuer 与 kid、各产品接入代码。**不含任何密钥**，供排障比对。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为服务元信息', type: MetaView })
   @Get('meta')
   meta(): Record<string, unknown> {
     return {

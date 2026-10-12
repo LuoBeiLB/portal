@@ -3,6 +3,7 @@ import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { DeductView, RefundView } from '../../common/dto/common.vo';
 import { BizException, ErrorCode } from '../../common/error-code';
 import { InternalKeyGuard } from '../../common/internal-key.guard';
 import { CurrentInternalProduct } from '../../common/internal-product.decorator';
@@ -43,7 +44,7 @@ export class InternalWalletController {
       '产品实现要点：账单先落库 → 调本接口 → code=0 改 status=1；网络超时/5xx 用**同一 bill_no** 退避重试（1s/5s/30s）。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为扣费结果与余额', type: DeductView })
   @Post('deduct')
   async deduct(@Body() dto: DeductDto, @CurrentInternalProduct() product: InternalProduct): Promise<unknown> {
     await this.assertUserExists(dto.portal_user_id);
@@ -75,7 +76,7 @@ export class InternalWalletController {
       '错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为退款结果与余额', type: RefundView })
   @Post('refund')
   async refund(@Body() dto: RefundDto, @CurrentInternalProduct() product: InternalProduct): Promise<unknown> {
     const result = await this.ledger.refund({

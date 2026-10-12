@@ -14,6 +14,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwksService } from './jwks.service';
+import { AuthTokenView, CredentialResultView, OkView } from '../../common/dto/common.vo';
 
 export const REFRESH_COOKIE = 'refresh_token';
 /** 契约 §1.2：Path=/api/auth/refresh */
@@ -40,7 +41,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为令牌 + 用户信息', type: AuthTokenView })
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -75,7 +76,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为令牌 + 用户信息', type: AuthTokenView })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -108,7 +109,7 @@ export class AuthController {
   })
   @Public()
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为新的令牌 + 用户信息', type: AuthTokenView })
   @Post('refresh')
   async refresh(
     @Req() request: Request,
@@ -134,7 +135,7 @@ export class AuthController {
       '返回 `{ ok: true }`。需要携带 Bearer token。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为 { ok: true }', type: OkView })
   @Post('logout')
   async logout(
     @CurrentUser() user: AuthUser,
@@ -160,7 +161,7 @@ export class AuthController {
       '错误：`2003` 当前密码错误 · `1001` 新密码不符合要求 / 新旧密码相同。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 含被吊销的会话数', type: CredentialResultView })
   @Post('password')
   async changePassword(
     @CurrentUser() user: AuthUser,

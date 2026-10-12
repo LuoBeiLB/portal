@@ -8,6 +8,12 @@ import { RawResponse } from '../../common/raw-response.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
 import {
+  AdminRechargeListView,
+  MyRechargeListView,
+  RechargeConfirmResultView,
+  TransactionListView,
+} from '../order/dto/order.vo';
+import {
   ConfirmRechargeDto,
   ExportTransactionQueryDto,
   MyRechargeQueryDto,
@@ -16,6 +22,7 @@ import {
   TransactionQueryDto,
 } from './dto/wallet.dto';
 import { WalletService } from './wallet.service';
+import { BalanceView, DeductView, RechargeApplyResultView, RefundView } from '../../common/dto/common.vo';
 
 /** 契约 §3 钱包接口（用户端，Bearer 鉴权） */
 @ApiTags('钱包 wallet')
@@ -30,6 +37,7 @@ export class WalletController {
     description:
       '返回 `{ balance_cents, status }`。`balance_cents` 单位**分**；`status`：0 正常 / 1 冻结（冻结时不能支付）。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为余额与钱包状态', type: BalanceView })
   @Get('balance')
   async balance(@CurrentUser() user: AuthUser): Promise<Record<string, unknown>> {
     return { ...(await this.wallet.balance(user.id)) };
@@ -42,6 +50,7 @@ export class WalletController {
       '分页返回 `{ list, total, page, size }`，按时间倒序。`type`：1 充值 / 2 扣费 / 3 退款 / 4 调账。\n\n' +
       '`created_at` 为 **UTC**（如 `2026-10-05T02:00:00Z`），前端展示前必须转本地时区；`detail` 是产品传入的任意 JSON。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为流水列表 + 分页', type: TransactionListView })
   @Get('transactions')
   async transactions(
     @CurrentUser() user: AuthUser,
@@ -58,7 +67,7 @@ export class WalletController {
       '金额 100 ~ 10,000,000 分。返回 `{ apply_id, status, notice }`，status：0 待核销 / 1 已到账 / 2 驳回。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为申请单号与提示文案', type: RechargeApplyResultView })
   @Post('recharge/apply')
   async applyRecharge(@CurrentUser() user: AuthUser, @Body() dto: RechargeApplyDto): Promise<Record<string, unknown>> {
     return this.wallet.applyRecharge(user.id, dto);
@@ -75,6 +84,7 @@ export class WalletController {
       '`reject_reason` **仅在驳回时非空**。\n\n' +
       '与管理端 `GET /api/admin/recharges` 参数一致，但不返回 `username` / `phone`（用户不需要看自己的）。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为充值记录 + 分页', type: MyRechargeListView })
   @Get('recharges')
   async listMyRecharges(
     @CurrentUser() user: AuthUser,
@@ -112,6 +122,7 @@ export class AdminController {
     description:
       '`?status=0` 只看待核销（0 待核销 / 1 已到账 / 2 驳回，缺省返回全部）。列表带 `username` / `phone` 便于核对。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为核销队列 + 分页', type: AdminRechargeListView })
   @Get('recharges')
   async listRecharges(@Query() query: RechargeQueryDto): Promise<Record<string, unknown>> {
     return { ...(await this.wallet.listRecharges(query.status, query.page, query.effectiveSize)) };
@@ -126,7 +137,7 @@ export class AdminController {
       '**经办人取自当前登录的管理员**（不再接受 `?admin_id=` 传参，避免伪造）。操作写入审计日志。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为核销结果', type: RechargeConfirmResultView })
   @Post('recharges/:id/confirm')
   async confirm(
     @CurrentUser() user: AuthUser,
@@ -165,6 +176,10 @@ export class AdminController {
       '导出动作会写入审计日志。',
   })
   @RawResponse()
+  @ApiOkResponse({
+    description: '**裸 CSV**（不套 {code,message,data} 壳），带 UTF-8 BOM，Content-Type: text/csv',
+    content: { 'text/csv': { schema: { type: 'string' } } },
+  })
   @Get('transactions/export')
   async exportTransactions(
     @CurrentUser() user: AuthUser,

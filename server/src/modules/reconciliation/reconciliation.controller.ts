@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { ReportBillsDto, RunReconciliationDto } from '../order/dto/order.dto';
 import { ProvisionWorker } from '../order/provision.worker';
 import { ReconciliationService } from './reconciliation.service';
+import { ProvisionJobsView, ReconciliationView, ReportBillsView } from '../../common/dto/common.vo';
 
 /**
  * 对账相关接口。
@@ -46,6 +47,7 @@ export class AdminReconciliationController {
     example: '2026-10-08',
     description: '业务日 YYYY-MM-DD（UTC），缺省为前一日',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为对账结果', type: ReconciliationView })
   @Get('daily')
   async daily(@Query('date') date?: string): Promise<Record<string, unknown>> {
     return { ...(await this.reconciliation.queryDaily(date)) };
@@ -58,7 +60,7 @@ export class AdminReconciliationController {
       '正常情况每天 04:10（UTC）自动对前一日；这个接口用于漏跑补数或排查差异。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为对账结果', type: ReconciliationView })
   @Post('run')
   async run(
     @CurrentUser() user: AuthUser,
@@ -83,6 +85,7 @@ export class AdminReconciliationController {
     summary: '开通任务队列状态（排障）',
     description: '返回各状态任务数：`0` 待处理、`1` 处理中、`2` 成功、`3` 失败。堆积过多说明产品侧开通异常。',
   })
+  @ApiOkResponse({ description: '统一响应壳，data 为开通任务统计', type: ProvisionJobsView })
   @Get('provision-jobs')
   async provisionJobs(): Promise<Record<string, unknown>> {
     return { stats: await this.worker.stats() };
@@ -106,7 +109,7 @@ export class InternalReconciliationController {
       '需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。',
   })
   @HttpCode(200)
-  @ApiOkResponse({ description: '契约 §0.2：业务响应统一 HTTP 200，结果看 body 的 code' })
+  @ApiOkResponse({ description: '统一响应壳，data 为接收与落库条数', type: ReportBillsView })
   @Post('report')
   async report(
     @Body() dto: ReportBillsDto,
