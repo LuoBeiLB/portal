@@ -25,9 +25,9 @@ process.env.SWAGGER_ENABLED = 'true';
 const { NestFactory } = require('@nestjs/core');
 const { SwaggerModule, DocumentBuilder } = require('@nestjs/swagger');
 
-const { AppModule } = require('../dist/app.module');
-const { PortalConfigService } = require('../dist/config/portal-config.service');
-const { setupSwagger } = require('../dist/config/swagger.setup');
+const { AppModule } = require('../../dist/app.module');
+const { PortalConfigService } = require('../../dist/config/portal-config.service');
+const { setupSwagger } = require('../../dist/config/swagger.setup');
 
 (async () => {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'] });

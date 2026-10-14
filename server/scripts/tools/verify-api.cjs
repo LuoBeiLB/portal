@@ -23,7 +23,7 @@ if (existsSync(resolve(process.cwd(), '.env'))) process.loadEnvFile(resolve(proc
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:3000').replace(/\/+$/, '');
 const INTERNAL_KEY = process.env.INTERNAL_KEY || process.env.STUB_PRODUCT_INTERNAL_KEY || '';
-const { loginAdmin, ADMIN_USERNAME: adminUser } = require('./lib/admin-auth.cjs');
+const { loginAdmin, ADMIN_USERNAME: adminUser } = require('../lib/admin-auth.cjs');
 
 let pass = 0;
 let fail = 0;

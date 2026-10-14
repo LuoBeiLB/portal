@@ -52,8 +52,17 @@ const QUERY = `
     console.log(`  ${pad(row.t, 30)}${pad(row.c, 16)}${pad(row.d ?? '(无)', 24)}${row.e ?? ''}`);
   }
 
-  console.log(`\n小结：A 类 ${byClass.db.length} 列（本地口径），B 类 ${byClass.app.length} 列（UTC 口径）`);
-  console.log('同一个时刻写进这两类列，字符串会差 8 小时 —— 这就是"同一行里差 8 小时"的来源。');
+  console.log(`\n小结：库生成列 ${byClass.db.length} 个，应用写列 ${byClass.app.length} 个`);
+  console.log('');
+  console.log('【口径说明】（2026-10-12 统一后）');
+  console.log('  · 两类列在库里的**字面量**确实不同（库生成=本地墙面 / 应用写=UTC 墙面），');
+  console.log('    但**读写偏移正好互相抵消**，所以对外输出的都是「墙上时间」。');
+  console.log('  · 前端规则：接口返回的时间字符串**直接展示，不要做时区转换**。');
+  console.log('  · 本清单的用途是复核：');
+  console.log('      - 新加的时间列该归哪一类（业务时刻 → 应用写；审计/创建时间 → 库生成）');
+  console.log('      - 别把 @CreateDateColumn / @UpdateDateColumn 又写回来（它们会让 TypeORM 自己写值，');
+  console.log('        与库生成列混在一行里就会差 8 小时 —— 这是当初那个 bug 的根源）');
+  console.log('  · 回归防护：scripts/e2e/e2e-admin.cjs 第 11 段有 4 条时间口径断言。');
 
   await conn.end();
 })().catch((error) => {

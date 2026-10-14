@@ -13,7 +13,7 @@
  */
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 // 管理端鉴权：2026-10-10 起改为管理员账号（JWT），不再是静态 X-Admin-Key
-const { loginAdmin } = require('./lib/admin-auth.cjs');
+const { loginAdmin } = require('../lib/admin-auth.cjs');
 
 let passed = 0;
 let failed = 0;

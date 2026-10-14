@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
@@ -190,7 +190,7 @@ export class AuthService {
 
     const passwordHash = await this.password.hash(newPassword);
     // `updated_at` 交给库：列上有 ON UPDATE CURRENT_TIMESTAMP(3)，只要本次 UPDATE
-    // 改了别的列就会自动刷新（已实测，见 scripts/diag-onupdate.cjs）
+    // 改了别的列就会自动刷新（已实测，见 (已删的排查脚本)）
     await this.users.update({ id: user.id }, { passwordHash });
 
     const revoked = await this.tokens.revokeAllSessions(user.id);

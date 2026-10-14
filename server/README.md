@@ -93,7 +93,7 @@ POST /api/auth/password                  改自己的密码（任何登录用户
 |---|---|---|
 | Swagger UI | `http://127.0.0.1:3000/api/docs` | 可交互，能直接填 token 试接口（`SWAGGER_ENABLED=true` 时才有，**生产默认关闭**） |
 | OpenAPI JSON（在线） | `http://127.0.0.1:3000/api/docs-json` | Apifox / Postman 可直接"导入 URL" |
-| OpenAPI JSON（离线文件） | `docs/openapi.json`（已提交） | 不起后端也能导入；改完接口用 `node scripts/export-openapi.cjs` 重新生成 |
+| OpenAPI JSON（离线文件） | `docs/openapi.json`（已提交） | 不起后端也能导入；改完接口用 `node scripts/check/export-openapi.cjs` 重新生成 |
 
 文档里已声明**两套**鉴权方案：`bearer`（用户端 + 管理端）、`internal-key`（§4 产品 → 门户）。
 
@@ -125,30 +125,45 @@ npm run migration:run
 # 6) 启动并自验
 npm run start:dev
 curl http://127.0.0.1:3000/api/healthz        # {"code":0,...,"data":{"status":"ok",...}}
-node scripts/e2e-round2.cjs                    # 另开终端，118 项端到端
+node scripts/e2e/e2e-round2.cjs                # 另开终端，123 项端到端
 ```
 
 ## 常用脚本
+
+脚本按用途分层放在 `scripts/` 下：
+
+```
+scripts/
+├── e2e/     # 端到端测试与运行器（起桩、建库、清缓存、专属端口隔离）
+├── check/   # 接口纪律自检 + OpenAPI 导出
+├── tools/   # 一次性/偶尔用的工具（密钥生成、时间口径复核、BOM 修复）
+└── lib/     # 被其他脚本 require 的辅助模块
+```
 
 | 命令 | 说明 |
 |---|---|
 | `npm run build` / `npm run clean` | 编译到 `dist/`（增量缓存放在 dist 内）；清理 |
 | `npm run start:dev` / `start:prod` | 开发 watch / 生产 `node dist/main.js` |
 | `npm run migration:run` / `migration:show` / `migration:revert` | 迁移三连 |
+| `npm run keys:generate` | **生成 JWT RS256 密钥对到 `keys/`**（部署必做；`--inline` 可打印内联 PEM） |
 | `npm test` | 单元测试（**68 项**，不需要数据库） |
-| `node scripts/e2e-round2.cjs` | 第 2 轮端到端（**118 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / 公开接口限流 / OpenAPI 文档） |
-| `node scripts/e2e-admin.cjs` | **管理端端到端（82 项）**：管理员登录与权限边界 / 用户禁用恢复 / 流水与日志 / 管理员 CRUD / 改密码 / 导出留痕 |
-| `powershell -File scripts/run-e2e-round3.ps1` | **第 3 轮端到端（84 项）**：**专属端口 3300 + 独立库 `cloud_portal_e2e`**（与开发实例隔离），自动起产品桩、跑完自动清理 |
-| `node scripts/diag-datetime-columns.cjs` | **列出所有时间列的口径**（库生成=本地墙面 / 应用写=UTC 墙面），改时间相关代码后复核用 |
-| `node scripts/check-openapi-responses.cjs` | **检查所有接口是否都声明了响应结构**（漏写会失败，防"前端靠猜字段名"） |
-| `node scripts/check-openapi-nullable-types.cjs` | **检查 nullable 字段类型是否标错**（TS 反射会把 `string \| null` 退化成 `object`） |
-| `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（23 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
-| `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
-| `node scripts/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
-| `node scripts/setup-test-db.cjs` | **建独立测试库 `cloud_portal_e2e` 并跑迁移**（`--reset` 可重建），e2e 全靠它隔离 |
-| `node scripts/reset-products.cjs` | 清空商品缓存（只动 `p_product*`，不碰用户与钱包） |
-| `node scripts/ensure-ps1-bom.cjs` | 给 `scripts/*.ps1` 补 UTF-8 BOM（没有 BOM 时 PowerShell 5.1 会按 ANSI 解码中文注释并报假语法错） |
+| `node scripts/e2e/e2e-round2.cjs` | 第 2 轮端到端（**123 项**：认证 / 钱包 / 核销 / 内网计费 / 密钥身份绑定 / bill_no 全局唯一 / 公开接口限流 / OpenAPI 文档） |
+| `node scripts/e2e/e2e-admin.cjs` | **管理端端到端（82 项）**：管理员登录与权限边界 / 用户禁用恢复 / 流水与日志 / 管理员 CRUD / 改密码 / 导出留痕 |
+| `powershell -File scripts/e2e/run-e2e-round3.ps1` | **第 3 轮端到端（84 项）**：**专属端口 3300 + 独立库 `cloud_portal_e2e`**（与开发实例隔离），自动起产品桩、跑完自动清理 |
+| `powershell -File scripts/e2e/run-e2e-refund.ps1` | **退款路径验证（23 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
+| `node scripts/e2e/setup-test-db.cjs` | **建独立测试库 `cloud_portal_e2e` 并跑迁移**（`--reset` 可重建），e2e 全靠它隔离 |
+| `node scripts/e2e/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
+| `node scripts/e2e/reset-products.cjs` | 清空商品缓存（只动 `p_product*`，不碰用户与钱包） |
+| `node scripts/check/check-openapi-responses.cjs` | **检查所有接口是否都声明了响应结构**（漏写会失败，防"前端靠猜字段名"） |
+| `node scripts/check/check-openapi-nullable-types.cjs` | **检查 nullable 字段类型是否标错**（TS 反射会把 `string \| null` 退化成 `object`） |
+| `node scripts/check/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
+| `node scripts/tools/diag-datetime-columns.cjs` | **列出所有时间列的口径**（库生成=本地墙面 / 应用写=UTC 墙面），改时间相关代码后复核用 |
+| `node scripts/tools/verify-api.cjs` | 手工冒烟清单（可指定远端地址与管理员账号） |
+| `node scripts/tools/ensure-ps1-bom.cjs` | 给 `scripts/` 下所有 `.ps1` 补 UTF-8 BOM（没有 BOM 时 PowerShell 5.1 会按 ANSI 解码中文注释并报假语法错） |
 | `npm run lint` | ESLint |
+
+> **所有脚本都要求从 `portal/server` 目录运行**（脚本内部用 `process.cwd()` 解析 `.env`、`node_modules`、`dist`），
+> 但它们**本身可以放在任意子目录**——本次分层就是靠这一点做到的。
 
 ### 脚本约定（2026-10-13 清理后）
 
@@ -275,7 +290,7 @@ ADMIN_PHONE=                                     # 可选
 | `PRODUCT_STORAGE_INTERNAL_KEY` | 真实云存储的密钥 | 门户（联调/生产） |
 | `STUB_PRODUCT_INTERNAL_KEY` | 测试桩的密钥 | `stub-product-server.cjs` + e2e 脚本 |
 
-⚠️ **改完 `.ps1` 记得跑 `node scripts/ensure-ps1-bom.cjs`**：PowerShell 5.1 读无 BOM 的 UTF-8
+⚠️ **改完 `.ps1` 记得跑 `node scripts/tools/ensure-ps1-bom.cjs`**：PowerShell 5.1 读无 BOM 的 UTF-8
 会按 ANSI 解码，中文注释里的引号会打乱语法，报出一堆与真实原因无关的 ParserError。
 很多编辑器（含 AI 编辑工具）保存时会丢掉 BOM。
 
@@ -352,6 +367,10 @@ src/
    ├─ product/                 # §5.1 商品目录同步 + ProductClient（门户外呼产品的唯一出口）
    ├─ order/                   # §2 商城与订单 + ProvisionWorker（§5.2 开通与自动退款）
    └─ reconciliation/          # §6 账单上报 + 日对账
-scripts/                       # 密钥生成 / MySQL 探测 / OpenAPI 导出 / 产品桩 / 端到端自验
+scripts/                       # 脚本按用途分层：
+   ├─ e2e/                     #   端到端测试 + 运行器 + 产品桩 + 测试库 + 清缓存
+   ├─ check/                   #   接口纪律自检 + OpenAPI 导出
+   ├─ tools/                   #   密钥生成 / 时间口径复核 / BOM 修复 / 手工冒烟
+   └─ lib/                     #   被上述脚本 require 的辅助模块
 docker-compose.yml             # 本地 MySQL 8 + Redis 7
 ```

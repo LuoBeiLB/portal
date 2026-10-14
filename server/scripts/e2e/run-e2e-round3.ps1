@@ -13,7 +13,9 @@
 # 会按 ANSI 解码，中文注释里的引号会打乱语法，报出与真实原因无关的 ParserError。
 
 $ErrorActionPreference = 'Stop'
-$server = Split-Path -Parent $PSScriptRoot
+# 本脚本在 server/scripts/e2e/ 下：上跳一层是 scripts/，再上跳是 server/
+$scripts = Split-Path -Parent $PSScriptRoot
+$server = Split-Path -Parent $scripts
 $repoRoot = Split-Path -Parent (Split-Path -Parent $server)
 $redisCli = Join-Path $repoRoot '.tools\redis\redis-cli.exe'
 
@@ -67,7 +69,7 @@ try {
     # 后面断言 `data_synced_at ≈ 现在` 就会因为读到上次的旧时间而失败。
     # （DB_DATABASE 原先在第 4 步才设，所以这里清的是运营库，白清。）
     $env:DB_DATABASE = $e2eDatabase
-    & node scripts/reset-products.cjs
+    & node scripts/e2e/reset-products.cjs
 
     Write-Host '=== 4. 起产品桩 + 门户服务 ==='
     # 用 STUB_* 覆盖 .env：让门户指向**测试桩**而不是 .env 里配的真实云存储。
@@ -95,7 +97,7 @@ try {
     Write-Host "  - 数据库: $env:DB_DATABASE（与 .env 里的运营库隔离）"
     Write-Host "  - 端口:   $appPort（不用 3000，避免与开发实例抢端口）"
 
-    $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
+    $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/e2e/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-run.txt" `
         -RedirectStandardError "$env:TEMP\stub-run-err.txt" -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 2
@@ -137,7 +139,7 @@ try {
     Write-Host ''
     Write-Host '=== 6. 执行第 3 轮端到端 ==='
     $env:E2E_BASE_URL = $baseUrl
-    & node scripts/e2e-round3.cjs
+    & node scripts/e2e/e2e-round3.cjs
     $exitCode = $LASTEXITCODE
 } finally {
     Write-Host ''

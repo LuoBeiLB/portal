@@ -1,13 +1,15 @@
 ﻿# 开通失败 → 自动退款 路径验证
 #
 # 用法（在 portal/server 下）：
-#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-e2e-refund.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\e2e\run-e2e-refund.ps1
 #
 # 与 run-e2e-round3.ps1 的区别：产品桩以 PROVISION_MODE=fail 启动，
 # 对任何 provision 都返回 4004（业务失败、不重试），用来验证门户的自动退款闭环。
 
 $ErrorActionPreference = 'Stop'
-$server = Split-Path -Parent $PSScriptRoot
+# 本脚本在 server/scripts/e2e/ 下：上跳一层是 scripts/，再上跳是 server/
+$scripts = Split-Path -Parent $PSScriptRoot
+$server = Split-Path -Parent $scripts
 $repoRoot = Split-Path -Parent (Split-Path -Parent $server)
 $redisCli = Join-Path $repoRoot '.tools\redis\redis-cli.exe'
 
@@ -46,7 +48,7 @@ try {
     }
 
     Write-Host '=== 3. 重置商品缓存并立即同步 ==='
-    & node scripts/reset-products.cjs
+    & node scripts/e2e/reset-products.cjs
 
     Write-Host '=== 4. 起故障模式产品桩（PROVISION_MODE=fail）+ 门户服务 ==='
     $env:PROVISION_MODE = 'fail'
@@ -63,7 +65,7 @@ try {
     # 专属端口 + 独立测试库：与开发机上运行的实例彻底隔离（同 run-e2e-round3.ps1）
     $env:APP_PORT = '3301'
     $env:DB_DATABASE = 'cloud_portal_e2e'
-    $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/stub-product-server.cjs' `
+    $stub = Start-Process -FilePath 'node' -ArgumentList 'scripts/e2e/stub-product-server.cjs' `
         -WorkingDirectory $server -RedirectStandardOutput "$env:TEMP\stub-refund.txt" `
         -RedirectStandardError "$env:TEMP\stub-refund-err.txt" -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 2
@@ -97,7 +99,7 @@ try {
     Write-Host ''
     Write-Host '=== 6. 执行退款路径验证 ==='
     $env:E2E_BASE_URL = 'http://127.0.0.1:3301'
-    & node scripts/e2e-refund.cjs
+    & node scripts/e2e/e2e-refund.cjs
     $exitCode = $LASTEXITCODE
 } finally {
     Write-Host ''

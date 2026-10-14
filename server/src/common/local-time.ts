@@ -56,7 +56,7 @@ export function utcWallTime(at: Date = new Date()): string {
  * 真实时刻是 `02:39:58Z`，即需要减 8 小时。
  *
  * 所以本函数只对**库生成列**有意义；应用写列本身就是真实时刻。
- * 判断依据见 `scripts/diag-datetime-columns.cjs` 输出的列清单。
+ * 判断依据见 `scripts/tools/diag-datetime-columns.cjs` 输出的列清单。
  */
 export function databaseGeneratedToInstant(value: Date | string | null | undefined): Date | null {
   if (value === null || value === undefined) return null;

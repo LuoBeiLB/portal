@@ -1,11 +1,11 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * 统一时间列口径：**全部交给 MySQL 生成**（2026-10-12）。
  *
  * ## 背景：同一库里存在两套时间口径，差 8 小时
  *
- * `DATETIME` 不带时区，只是"墙上时间"字符串。实测（`scripts/diag-datetime-columns.cjs`）：
+ * `DATETIME` 不带时区，只是"墙上时间"字符串。实测（`scripts/tools/diag-datetime-columns.cjs`）：
  *
  * | | A 类：库生成 | B 类：应用写入 |
  * |---|---|---|
@@ -17,7 +17,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * 于是 **A 类列返回给前端会整体 +8 小时**（`created_at` / `updated_at` / `synced_at` 全中），
  * 而 B 类反而是对的。
  *
- * 关键机制（`scripts/diag-orm-default.cjs` 验证）：
+ * 关键机制（`(已删的排查脚本)` 验证）：
  * **只要应用不给值，TypeORM 生成的 INSERT 就是 `DEFAULT`**，让库来填：
  *
  * ```sql
