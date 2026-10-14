@@ -1,4 +1,4 @@
-# cloud-portal · 服务端
+﻿# cloud-portal · 服务端
 
 云平台统一门户服务端（NestJS 10 + TypeORM + MySQL + Redis）。
 
@@ -145,15 +145,37 @@ node scripts/e2e-round2.cjs                    # 另开终端，118 项端到端
 | `powershell -File scripts/run-e2e-refund.ps1` | **退款路径验证（23 项）**：产品桩以 `PROVISION_MODE=fail` 启动，验证失败自动退款闭环 |
 | `node scripts/stub-product-server.cjs` | 云存储侧接口桩（`GET /internal/products` + `POST /internal/provision`，支持故障注入） |
 | `node scripts/export-openapi.cjs` | 导出离线 `docs/openapi.json`（需先 `npm run build` 且能连库） |
-| `node scripts/probe-mysql.cjs` | 探测目标 MySQL 版本 / 排序规则 / 已有表 |
+| `node scripts/setup-test-db.cjs` | **建独立测试库 `cloud_portal_e2e` 并跑迁移**（`--reset` 可重建），e2e 全靠它隔离 |
 | `node scripts/reset-products.cjs` | 清空商品缓存（只动 `p_product*`，不碰用户与钱包） |
+| `node scripts/ensure-ps1-bom.cjs` | 给 `scripts/*.ps1` 补 UTF-8 BOM（没有 BOM 时 PowerShell 5.1 会按 ANSI 解码中文注释并报假语法错） |
 | `npm run lint` | ESLint |
+
+### 脚本约定（2026-10-13 清理后）
+
+**只保留两类脚本入库**：
+
+1. **测试与自检** —— e2e 套件、产品桩、OpenAPI 自检、测试库初始化
+2. **可复用的诊断** —— 出同类问题时还会再用的（如时间口径复核）
+
+**一次性排查脚本用完即删，不入库**。历史上曾入库过一批（`probe-product-*` / `probe-mysql` / `probe-schema` / `probe-order-pay-semantics` /`diag-http` / `diag-admin-bootstrap` / `diag-datetime-offset` / `inspect-products` / `show-admins` / `demo-jwks-verify` 共 11 个），
+对应的**具体问题都已修复**，留着只会让 `scripts/` 越来越难辨认，已在本次「清理一次性排查脚本」提交中删除
+（需要时用 `git show <commit>^:<path>` 从历史取回）。
+
+**临时脚本命名统一用 `tmp-` 前缀**，并在收尾时确认 `git status` 干净 —— 防止误提交。
+
+> ⚠️ **别把"临时脚本"和"排查工具"混为一谈**：像 `diag-datetime-columns.cjs` 这种，
+> 它对应的是**一类会反复出现的问题**（任何涉及时间列的改动都要复核），所以留下；
+> 而 `probe-mysql.cjs` 只服务于"当时那个库的排序规则问题"，问题修完就没有下一次了。
 
 ---
 
 ## 关键约定（改动前务必读）
 
-1. **金额一律整数「分」**，字段名统一 `*_cents`；时间统一存 UTC（`DATETIME(3)`），展示层再转本地。
+1. **金额一律整数「分」**，字段名统一 `*_cents`。
+
+2. **时间列一律由 MySQL 生成，对外表现为「墙上时间」**（2026-10-12 统一）。
+   接口返回的时间字符串**直接展示即可，不要做时区转换** —— 详见
+   `docs/09-契约v1.1差异与补充.md` §2.3 与 `src/common/local-time.ts`。
 2. **响应恒为** `{ code, message, data }`，HTTP 状态码一律 **200**（404/405 除外）。业务码见 `src/common/error-code.ts`，**禁止散落魔法数字**。
    - ⚠️ **Nest 对 POST 默认返回 201**，与契约冲突。所有 POST handler 必须标 `@HttpCode(200)` + `@ApiOkResponse()`（后者让 Swagger 也如实标注 200）。端到端里有断言盯着这条。
 3. **两个接口例外、不套壳**，必须标 `@RawResponse()`：§1.5 JWKS（产品侧按标准 JWKS 解析）、§6 CSV 导出。
