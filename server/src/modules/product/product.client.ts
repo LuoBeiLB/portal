@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { PortalConfigService } from '../../config/portal-config.service';
 import { ProductEndpoint } from '../../config/configuration';
-import { BizException, ErrorCode } from '../../common/error-code';
+import { BizException, ErrorCode } from '../../common/error/error-code';
 
 /** 门户外呼产品时的统一响应外壳（契约 §5 要求产品响应套 `{code,data}`，与门户一致） */
 interface ProductEnvelope<T> {

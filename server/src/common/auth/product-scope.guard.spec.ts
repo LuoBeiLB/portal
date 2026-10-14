@@ -1,6 +1,6 @@
 import { ExecutionContext } from '@nestjs/common';
 
-import { BizException, ErrorCode } from './error-code';
+import { BizException, ErrorCode } from '../error/error-code';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 import { ProductScopeGuard } from './product-scope.guard';
 

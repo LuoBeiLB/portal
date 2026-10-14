@@ -2,9 +2,9 @@ import { ApiBearerAuth, ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiTags
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-import { AdminGuard } from '../../common/admin.guard';
-import { CurrentUser, AuthUser } from '../../common/current-user.decorator';
-import { RawResponse } from '../../common/raw-response.decorator';
+import { AdminGuard } from '../../common/auth/admin.guard';
+import { CurrentUser, AuthUser } from '../../common/auth/current-user.decorator';
+import { RawResponse } from '../../common/auth/raw-response.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
 import {

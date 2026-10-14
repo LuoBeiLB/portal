@@ -2,10 +2,10 @@ import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 
-import { PortalConfigService } from '../config/portal-config.service';
-import { TokenService } from '../modules/auth/token.service';
+import { PortalConfigService } from '../../config/portal-config.service';
+import { TokenService } from '../../modules/auth/token.service';
 import { AuthUser } from './current-user.decorator';
-import { BizException, ErrorCode } from './error-code';
+import { BizException, ErrorCode } from '../error/error-code';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 interface FakeRequest {

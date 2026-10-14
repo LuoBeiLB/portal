@@ -4,7 +4,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
 import { HealthView, MetaView } from './common/dto/common.vo';
-import { Public } from './common/public.decorator';
+import { Public } from './common/auth/public.decorator';
 import { PortalConfigService } from './config/portal-config.service';
 
 /**

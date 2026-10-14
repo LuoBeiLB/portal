@@ -6,8 +6,8 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/all-exceptions.filter';
-import { ResponseInterceptor } from './common/response.interceptor';
+import { AllExceptionsFilter } from './common/http/all-exceptions.filter';
+import { ResponseInterceptor } from './common/http/response.interceptor';
 import { PortalConfigService } from './config/portal-config.service';
 import { setupSwagger } from './config/swagger.setup';
 

@@ -1,9 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 
-import { UserRole } from '../modules/user/entities/user-status.enum';
+import { UserRole } from '../../modules/user/entities/user-status.enum';
 import { AuthUser } from './current-user.decorator';
-import { BizException, ErrorCode } from './error-code';
+import { BizException, ErrorCode } from '../error/error-code';
 
 /**
  * 管理端鉴权（契约 §6）。

@@ -2,7 +2,7 @@ import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { firstValueFrom, of } from 'rxjs';
 
-import { ErrorCode } from './error-code';
+import { ErrorCode } from '../error/error-code';
 import { ResponseInterceptor, withBizCode } from './response.interceptor';
 
 const ctx = {

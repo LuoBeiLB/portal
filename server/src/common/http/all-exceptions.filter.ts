@@ -2,7 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@n
 import { Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
-import { ErrorCode, BizException, ERROR_MESSAGES } from './error-code';
+import { ErrorCode, BizException, ERROR_MESSAGES } from '../error/error-code';
 
 interface MysqlDriverError {
   code?: string;

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 
-import { BizException, ErrorCode } from './error-code';
-import { RateLimiterService } from './rate-limiter.service';
-import { clientIpOf } from './request.util';
+import { BizException, ErrorCode } from '../error/error-code';
+import { RateLimiterService } from '../redis/rate-limiter.service';
+import { clientIpOf } from '../util/request.util';
 
 /**
  * 登录/注册限流封装：`${scope}:${ip}` 双维度计数。

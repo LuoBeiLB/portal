@@ -3,8 +3,8 @@ import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { ErrorCode } from './error-code';
-import { RAW_RESPONSE_KEY } from './raw-response.decorator';
+import { ErrorCode } from '../error/error-code';
+import { RAW_RESPONSE_KEY } from '../auth/raw-response.decorator';
 
 export interface PortalResponse<T> {
   code: number;

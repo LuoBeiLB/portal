@@ -3,7 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, Validate } from 'class-validator';
 import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
-import { isIsoDateString } from '../../../common/date.util';
+import { isIsoDateString } from '../../../common/util/date.util';
 import { PageQueryDto } from '../../wallet/dto/wallet.dto';
 
 /** 校验 `YYYY-MM-DD` 且必须是真实存在的日历日期（拒绝 2026-13-45 / 2026-02-30） */

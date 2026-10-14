@@ -15,7 +15,7 @@ import {
   ValidatorConstraintInterface,
 } from 'class-validator';
 
-import { isIsoDateString } from '../../../common/date.util';
+import { isIsoDateString } from '../../../common/util/date.util';
 
 /**
  * 校验 `YYYY-MM-DD` 且必须是真实存在的日历日期。

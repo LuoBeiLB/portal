@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-import { sha256Hex, randomToken } from '../../common/crypto.util';
-import { RedisStore } from '../../common/redis-store.service';
+import { sha256Hex, randomToken } from '../../common/util/crypto.util';
+import { RedisStore } from '../../common/redis/redis-store.service';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { UserRole } from '../user/entities/user-status.enum';
 

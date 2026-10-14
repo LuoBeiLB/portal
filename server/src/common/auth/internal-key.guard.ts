@@ -1,9 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { Request } from 'express';
 
-import { PortalConfigService } from '../config/portal-config.service';
-import { safeEqual } from './crypto.util';
-import { BizException, ErrorCode } from './error-code';
+import { PortalConfigService } from '../../config/portal-config.service';
+import { safeEqual } from '../util/crypto.util';
+import { BizException, ErrorCode } from '../error/error-code';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 
 export const INTERNAL_KEY_HEADER = 'x-internal-key';

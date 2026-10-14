@@ -1,4 +1,4 @@
-# 依赖
+﻿# 依赖
 node_modules/
 
 # 构建产物
@@ -19,3 +19,6 @@ npm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Jest 缓存（jest 会把它写在 rootDir 下，勿入库）
+.jest-cache/

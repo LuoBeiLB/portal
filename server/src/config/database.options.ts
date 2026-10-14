@@ -34,7 +34,7 @@ import Redis from 'ioredis';
  *    （前两个装饰器会让 TypeORM **总是自己写值**，是偏移的根源）
  * 2. 去掉应用显式写 `createdAt` / `updatedAt` / `syncedAt` 的地方
  * 3. `next_run_at` / `claimed_at` 这类**参与内部运算**的列**故意保持真实时刻**（不与 `Date.now()` 错位）
- * 4. 展示型的"应用写"字段在**出口**补一次本地偏移（`common/local-time.ts` 的 `instantToWallIso`）
+ * 4. 展示型的"应用写"字段在**出口**补一次本地偏移（`common/time/local-time.ts` 的 `instantToWallIso`）
  *
  * **对外表现**：接口返回的时间字符串就是"墙上时间"，**前端直接展示、不要做时区转换**。
  * 详见 `docs/09-契约v1.1差异与补充.md` §2.3。

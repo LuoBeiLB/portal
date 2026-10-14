@@ -2,10 +2,10 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-import { AuthRateLimit } from '../../common/auth-rate-limit';
-import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
-import { Public } from '../../common/public.decorator';
-import { clientIpOf, extractBearerToken } from '../../common/request.util';
+import { AuthRateLimit } from '../../common/auth/auth-rate-limit';
+import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
+import { Public } from '../../common/auth/public.decorator';
+import { clientIpOf, extractBearerToken } from '../../common/util/request.util';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';

@@ -1,8 +1,8 @@
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Controller, Get } from '@nestjs/common';
 
-import { Public } from '../../common/public.decorator';
-import { RawResponse } from '../../common/raw-response.decorator';
+import { Public } from '../../common/auth/public.decorator';
+import { RawResponse } from '../../common/auth/raw-response.decorator';
 import { JwksService } from './jwks.service';
 
 /**

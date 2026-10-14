@@ -5,12 +5,12 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AppController } from './app.controller';
-import { AdminGuard } from './common/admin.guard';
-import { AllExceptionsFilter } from './common/all-exceptions.filter';
-import { JwtAuthGuard } from './common/jwt-auth.guard';
-import { RateLimiterModule } from './common/rate-limiter.service';
-import { RedisModule } from './common/redis.module';
-import { RedisStore } from './common/redis-store.service';
+import { AdminGuard } from './common/auth/admin.guard';
+import { AllExceptionsFilter } from './common/http/all-exceptions.filter';
+import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
+import { RateLimiterModule } from './common/redis/rate-limiter.service';
+import { RedisModule } from './common/redis/redis.module';
+import { RedisStore } from './common/redis/redis-store.service';
 import { ConfigurationModule } from './config/configuration.module';
 import { buildMysqlOptions } from './config/database.options';
 import { PortalConfigService } from './config/portal-config.service';

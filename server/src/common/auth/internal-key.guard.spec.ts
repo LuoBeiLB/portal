@@ -1,7 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 
-import { PortalConfigService } from '../config/portal-config.service';
-import { BizException, ErrorCode } from './error-code';
+import { PortalConfigService } from '../../config/portal-config.service';
+import { BizException, ErrorCode } from '../error/error-code';
 import { InternalKeyGuard } from './internal-key.guard';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 

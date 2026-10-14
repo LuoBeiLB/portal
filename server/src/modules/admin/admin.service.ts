@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
-import { uuidv7 } from '../../common/crypto.util';
-import { BizException, ErrorCode } from '../../common/error-code';
+import { uuidv7 } from '../../common/util/crypto.util';
+import { BizException, ErrorCode } from '../../common/error/error-code';
 import { PasswordService } from '../auth/password.service';
 import { TokenService } from '../auth/token.service';
 import { UserRole, UserStatus, WalletStatus } from '../user/entities/user-status.enum';

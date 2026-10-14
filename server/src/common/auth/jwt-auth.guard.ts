@@ -3,13 +3,13 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 
-import { PortalConfigService } from '../config/portal-config.service';
-import { TokenService } from '../modules/auth/token.service';
-import { UserRole } from '../modules/user/entities/user-status.enum';
+import { PortalConfigService } from '../../config/portal-config.service';
+import { TokenService } from '../../modules/auth/token.service';
+import { UserRole } from '../../modules/user/entities/user-status.enum';
 import { AuthUser } from './current-user.decorator';
-import { BizException, ErrorCode } from './error-code';
+import { BizException, ErrorCode } from '../error/error-code';
 import { IS_PUBLIC_KEY } from './public.decorator';
-import { extractBearerToken } from './request.util';
+import { extractBearerToken } from '../util/request.util';
 
 /**
  * 全局 JWT 鉴权（契约 §0.3）：`Authorization: Bearer <RS256 access token>`，2h 有效。

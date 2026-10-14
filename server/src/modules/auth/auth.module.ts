@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { AuthRateLimit } from '../../common/auth-rate-limit';
+import { AuthRateLimit } from '../../common/auth/auth-rate-limit';
 import { AuditModule } from '../audit/audit.module';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';

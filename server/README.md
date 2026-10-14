@@ -1,4 +1,4 @@
-﻿# cloud-portal · 服务端
+# cloud-portal · 服务端
 
 云平台统一门户服务端（NestJS 10 + TypeORM + MySQL + Redis）。
 
@@ -190,24 +190,35 @@ scripts/
 
 2. **时间列一律由 MySQL 生成，对外表现为「墙上时间」**（2026-10-12 统一）。
    接口返回的时间字符串**直接展示即可，不要做时区转换** —— 详见
-   `docs/09-契约v1.1差异与补充.md` §2.3 与 `src/common/local-time.ts`。
-2. **响应恒为** `{ code, message, data }`，HTTP 状态码一律 **200**（404/405 除外）。业务码见 `src/common/error-code.ts`，**禁止散落魔法数字**。
+   `docs/09-契约v1.1差异与补充.md` §2.3 与 `src/common/time/local-time.ts`。
+
+3. **响应恒为** `{ code, message, data }`，HTTP 状态码一律 **200**（404/405 除外）。业务码见 `src/common/error/error-code.ts`，**禁止散落魔法数字**。
    - ⚠️ **Nest 对 POST 默认返回 201**，与契约冲突。所有 POST handler 必须标 `@HttpCode(200)` + `@ApiOkResponse()`（后者让 Swagger 也如实标注 200）。端到端里有断言盯着这条。
-3. **两个接口例外、不套壳**，必须标 `@RawResponse()`：§1.5 JWKS（产品侧按标准 JWKS 解析）、§6 CSV 导出。
-4. **幂等**：`bill_no`（`w_transaction` 唯一索引）、`order_item_id`（订单项主键 = 产品 provision 幂等键）。先落库生成单号，再发请求。
-5. **钱包扣费只走条件原子更新**：
+
+4. **两个接口例外、不套壳**，必须标 `@RawResponse()`：§1.5 JWKS（产品侧按标准 JWKS 解析）、§6 CSV 导出。
+
+5. **幂等**：`bill_no`（`w_transaction` 唯一索引）、`order_item_id`（订单项主键 = 产品 provision 幂等键）。先落库生成单号，再发请求。
+
+6. **钱包扣费只走条件原子更新**：
    ```sql
    UPDATE w_wallet SET balance_cents = balance_cents - ?
     WHERE user_id = ? AND status = 0 AND balance_cents >= ?
    ```
    影响行数 = 0 即余额不足/冻结；因此钱包表**不设 version 乐观锁列**。
-6. **充值核销用条件更新** `WHERE id=? AND status=0` 抢占状态，赢家才动钱（防两个管理员同时点通过导致重复增额）。
-7. **用户 ID 全系统统一 `CHAR(36)`**（UUIDv7 字符串），不做 `BINARY(16)` 转换。
-7.1 **支付逐项扣费**：`bill_no = order:{order_id}:item:{item_id}`（契约 §2.4 原文），并在流水上带 `product_code` 便于对账归集；某一项余额不足即**停止处理后续项**，已成功项保留。
-7.2 **开通与扣费解耦**：扣费在 HTTP 请求内完成（用户要知道钱够不够），provision 交给 `ProvisionWorker` 后台推进；契约的幂等键与状态语义全部保留。
-8. **门户不直连任何产品数据库**；跨系统只走契约里的 HTTP 接口（内网 + `X-Internal-Key`）。
-9. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund`、`/api/internal/reconciliation/report` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
-10. 密钥、密码、AK **不进仓库**：`.env` 与 `keys/` 已被 `.gitignore` 忽略。
+
+7. **充值核销用条件更新** `WHERE id=? AND status=0` 抢占状态，赢家才动钱（防两个管理员同时点通过导致重复增额）。
+
+8. **用户 ID 全系统统一 `CHAR(36)`**（UUIDv7 字符串），不做 `BINARY(16)` 转换。
+
+9. **支付逐项扣费**：`bill_no = order:{order_id}:item:{item_id}`（契约 §2.4 原文），并在流水上带 `product_code` 便于对账归集；某一项余额不足即**停止处理后续项**，已成功项保留。
+
+10. **开通与扣费解耦**：扣费在 HTTP 请求内完成（用户要知道钱够不够），provision 交给 `ProvisionWorker` 后台推进；契约的幂等键与状态语义全部保留。
+
+11. **门户不直连任何产品数据库**；跨系统只走契约里的 HTTP 接口（内网 + `X-Internal-Key`）。
+
+12. **内网接口不对公网暴露**（契约附录自检项）：`/api/wallet/deduct`、`/api/wallet/refund`、`/api/internal/reconciliation/report` 只靠密钥鉴权，必须由防火墙/nginx 限制来源。
+
+13. 密钥、密码、AK **不进仓库**：`.env` 与 `keys/` 已被 `.gitignore` 忽略。
 
 ## 管理端鉴权：管理员账号（2026-10-10 起，废弃 `X-Admin-Key`）
 
@@ -333,20 +344,28 @@ src/
 ├─ main.ts                     # 引导：/api 前缀（排除 .well-known）、cookie、响应拦截、异常过滤、校验管道
 ├─ app.module.ts               # 根模块（配置 + Redis + JWT + TypeORM + 全局鉴权）
 ├─ app.controller.ts           # /api/healthz、/api/meta（@Public）
-├─ common/
-│  ├─ error-code.ts            # 契约 §0.6 错误码 + BizException
-│  ├─ response.interceptor.ts  # 契约 §0.2 统一响应（@RawResponse 例外）
-│  ├─ raw-response.decorator.ts
-│  ├─ all-exceptions.filter.ts # 业务失败也返回 HTTP 200
-│  ├─ jwt-auth.guard.ts        # 全局 JWT 鉴权（1002/1003 + 登出吊销检查）
-│  ├─ internal-key.guard.ts    # 契约 §4 内网 X-Internal-Key（**密钥 → 产品身份绑定**）
-│  ├─ internal-product.types.ts / .decorator.ts  # 身份载体与 @CurrentInternalProduct()
-│  ├─ product-scope.guard.ts   # body 自报的 product_code 必须与密钥归属一致，否则 1004
-│  ├─ admin.guard.ts           # 契约 §6 管理端 X-Admin-Key
-│  ├─ rate-limiter.service.ts  # Redis 固定窗口限流（故障降级放行）
-│  ├─ redis.{constants,provider,module,store}.ts
-│  ├─ crypto.util.ts           # uuidv7 / randomToken / sha256 / safeEqual
-│  └─ request.util.ts          # Bearer 解析 / 客户端 IP
+├─ common/                     # 按用途分 8 个子目录（2026-10-13 分层）
+│  ├─ auth/                    #   谁在调用、有什么权限
+│  │  ├─ jwt-auth.guard.ts        全局 JWT 鉴权（1002/1003 + 登出吊销检查）
+│  │  ├─ internal-key.guard.ts    契约 §4 内网 X-Internal-Key（**密钥 → 产品身份绑定**）
+│  │  ├─ internal-product.types.ts / .decorator.ts   身份载体与 @CurrentInternalProduct()
+│  │  ├─ product-scope.guard.ts   body 自报的 product_code 必须与密钥归属一致，否则 1004
+│  │  ├─ admin.guard.ts           契约 §6 管理端（管理员账号 + role 校验）
+│  │  ├─ public.decorator.ts      跳过全局鉴权
+│  │  ├─ raw-response.decorator.ts 跳过统一响应壳（JWKS / CSV）
+│  │  ├─ current-user.decorator.ts
+│  │  └─ auth-rate-limit.ts       登录/注册限流
+│  ├─ http/                    #   HTTP 出入口
+│  │  ├─ response.interceptor.ts  契约 §0.2 统一响应（@RawResponse 例外）
+│  │  └─ all-exceptions.filter.ts 业务失败也返回 HTTP 200
+│  ├─ redis/                   #   连接与限流
+│  │  ├─ redis.{constants,provider,module,store}.ts
+│  │  └─ rate-limiter.service.ts  Redis 固定窗口限流（故障降级放行）
+│  ├─ error/                   #   error-code.ts 契约 §0.6 错误码 + BizException
+│  ├─ time/                    #   local-time.ts 时间口径（墙上时间，2026-10-12 统一）
+│  ├─ util/                    #   crypto.util（uuidv7/sha256/safeEqual）· date.util（ISO 日期校验）· request.util（Bearer/IP）
+│  ├─ db/                      #   base.entity.ts 实体基类（时间列由库生成）
+│  └─ dto/                     #   common.vo.ts 通用响应模型
 ├─ config/
 │  ├─ configuration.ts         # 环境变量 → 类型化配置（含"未接入产品"的 enabled 判定）
 │  ├─ portal-config.service.ts

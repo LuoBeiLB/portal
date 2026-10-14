@@ -1,7 +1,7 @@
 import { FactoryProvider } from '@nestjs/common';
 import Redis from 'ioredis';
 
-import { PortalConfigService } from '../config/portal-config.service';
+import { PortalConfigService } from '../../config/portal-config.service';
 import { REDIS_CLIENT } from './redis.constants';
 
 /**

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { clientIpOf } from '../../common/request.util';
+import { clientIpOf } from '../../common/util/request.util';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { AuditAction, AuditLogEntity, AuditLogView } from './entities/audit-log.entity';
 

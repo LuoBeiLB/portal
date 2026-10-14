@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 
-import { BizException, ErrorCode } from '../../common/error-code';
+import { BizException, ErrorCode } from '../../common/error/error-code';
 import { WalletStatus } from '../user/entities/user-status.enum';
 import { TransactionEntity, TransactionType } from './entities/transaction.entity';
 import { WalletEntity } from './entities/wallet.entity';

@@ -1,7 +1,7 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 
-import { UserRole } from '../modules/user/entities/user-status.enum';
+import { UserRole } from '../../modules/user/entities/user-status.enum';
 
 /** 当前登录用户（由 JwtAuthGuard 注入） */
 export interface AuthUser {

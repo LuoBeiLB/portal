@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 
-import { BizException, ErrorCode } from './error-code';
+import { BizException, ErrorCode } from '../error/error-code';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 
 /**

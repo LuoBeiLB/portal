@@ -2,13 +2,13 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiSecurity, ApiT
 import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 
-import { AdminGuard } from '../../common/admin.guard';
-import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
-import { InternalKeyGuard } from '../../common/internal-key.guard';
-import { CurrentInternalProduct } from '../../common/internal-product.decorator';
-import { InternalProduct } from '../../common/internal-product.types';
-import { ProductScopeGuard } from '../../common/product-scope.guard';
-import { Public } from '../../common/public.decorator';
+import { AdminGuard } from '../../common/auth/admin.guard';
+import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
+import { InternalKeyGuard } from '../../common/auth/internal-key.guard';
+import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
+import { InternalProduct } from '../../common/auth/internal-product.types';
+import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
+import { Public } from '../../common/auth/public.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
 import { ReportBillsDto, RunReconciliationDto } from '../order/dto/order.dto';

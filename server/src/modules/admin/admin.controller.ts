@@ -2,7 +2,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 
-import { AdminGuard } from '../../common/admin.guard';
+import { AdminGuard } from '../../common/auth/admin.guard';
 import {
   AdminAccountListView,
   AdminCreatedView,
@@ -12,7 +12,7 @@ import {
   CredentialResultView,
   StatusChangeView,
 } from '../../common/dto/common.vo';
-import { AuthUser, CurrentUser } from '../../common/current-user.decorator';
+import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
 import { AdminTransactionListView } from '../order/dto/order.vo';
