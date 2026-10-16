@@ -371,12 +371,26 @@ export class OrderService {
   }
 }
 
-/** 订单号：`O` + UTC 日期 + 6 位随机（唯一索引兜底，冲突概率极低且可重试） */
+/**
+ * 订单号随机部分的位数。
+ *
+ * ⚠️ 取值范围（`10 ** N`）与补零宽度（`padStart(N)`）**必须由这一个常量推导**。
+ * 曾经两者各写各的字面量，改范围忘了改宽度，订单号长度变成 6~9 位不定长
+ * —— 九成的号看着正常、偶尔少一位，比全错更难发现。
+ *
+ * 位数权衡：当天 n 个订单的撞号概率约 `1 - e^(-n²/2N)`，N = 10^N。
+ * 6 位时 n=1000 已达 39%；9 位降到约 0.05%。
+ * 数据库 `uk_order_no` 唯一索引兜底，保证不会真的产生重复订单号；
+ * 万一撞上，表现为下单报唯一键冲突（需用户重试），位数放宽后此概率已可忽略。
+ */
+const ORDER_NO_DIGITS = 9;
+
+/** 订单号：`O` + UTC 日期 + 9 位随机（唯一索引兜底） */
 export function generateOrderNo(date = new Date()): string {
   const ymd = date.toISOString().slice(0, 10).replace(/-/g, '');
-  const random = Math.floor(Math.random() * 1_000_000)
+  const random = Math.floor(Math.random() * 10 ** ORDER_NO_DIGITS)
     .toString()
-    .padStart(6, '0');
+    .padStart(ORDER_NO_DIGITS, '0');
   return `O${ymd}-${random}`;
 }
 

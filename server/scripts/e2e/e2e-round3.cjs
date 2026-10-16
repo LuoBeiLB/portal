@@ -180,7 +180,7 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     check('下单成功 code=0', created.body.code === 0, created.body);
     const order = created.body?.data;
     orderId = order?.order_id;
-    check('order_no 形如 O20261008-xxxxxx', /^O\d{8}-\d{6}$/.test(order?.order_no ?? ''), order?.order_no);
+    check('order_no 形如 O20261008-000123456', /^O\d{8}-\d{9}$/.test(order?.order_no ?? ''), order?.order_no);
     check('总额 = 3000 × 2 = 6000 分（后端重算）', order?.total_cents === 6000, order?.total_cents);
     check('订单初始状态 0 待支付', order?.status === 0, order?.status);
     check('订单项状态 0，且 item_id 是 provision 幂等键', order?.items?.[0]?.status === 0 && Boolean(order?.items?.[0]?.item_id), order?.items?.[0]);
