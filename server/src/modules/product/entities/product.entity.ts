@@ -39,8 +39,23 @@ export class ProductEntity {
   @Column({ name: 'billing_mode', type: 'tinyint', default: BillingMode.PERIOD, comment: '1 包周期 2 按量' })
   billingMode!: BillingMode;
 
-  @Column({ name: 'period_days', type: 'int', nullable: true, comment: 'billing_mode=1 必填' })
-  periodDays!: number | null;
+  /**
+   * 周期长度，单位 **小时**（2026-10-14 从「天」改为「小时」）。
+   *
+   * `billing_mode=1`（包周期）必填；`billing_mode=2`（按量）为 null。
+   * 换算：1 天 = `24`、30 天 = `720`、3 小时 = `3`。
+   *
+   * 为什么改单位：`period_days` 粒度太粗，无法表达小时级商品
+   * （云电脑的「体验 3 小时」用天只能填 1，会被算成 24 小时）。
+   * 详见 `docs/16-计费周期单位变更-接口与变更说明.md`。
+   */
+  @Column({
+    name: 'period_hours',
+    type: 'int',
+    nullable: true,
+    comment: '周期长度（小时）；billing_mode=1 必填。1天=24，30天=720',
+  })
+  periodHours!: number | null;
 
   @Column({ name: 'stock', type: 'int', nullable: true, comment: 'NULL = 不限或未上报，前端显示「现货」' })
   stock!: number | null;

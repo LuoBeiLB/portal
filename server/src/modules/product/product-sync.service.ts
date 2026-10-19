@@ -27,6 +27,17 @@ export interface ProductView {
   spec: Record<string, unknown> | null;
   price_cents: number;
   billing_mode: number;
+  /**
+   * 周期长度，单位 **小时**（2026-10-14 起）。`billing_mode=2`（按量）为 null。
+   *
+   * 前端展示规则：`% 24 === 0` 显示「N 天」，否则显示「N 小时」。
+   * **不要**再按天换算。
+   */
+  period_hours: number | null;
+  /**
+   * @deprecated 兼容字段（2026-10-14）。仅为尚未改到新字段的消费方保留，
+   * 值 = `ceil(period_hours / 24)`。**新代码请用 `period_hours`**。
+   */
   period_days: number | null;
   stock: number | null;
   synced_at: string;
@@ -56,6 +67,49 @@ export interface ProductListView {
     /** 目录里最新一条商品的同步时间（= 当前展示价格的"新鲜度"），无商品为 null */
     data_synced_at: string | null;
   };
+}
+
+/**
+ * 把产品上报的周期字段归一化成**小时**（2026-10-14）。
+ *
+ * 兼容期内产品有两种写法，规则：
+ * 1. `period_hours` 有值 → 直接用（**优先**）
+ * 2. 否则 `period_days` 有值 → **×24** 换算成小时（旧产品，如云存储）
+ * 3. 都没有 / 非正数 → null（按量计费或产品未上报）
+ *
+ * ⚠️ 两个都填时以 `period_hours` 为准，并打 WARN —— 这种情况说明产品侧改造不彻底，
+ * 早发现比晚发现好（否则单位错一次就是 24 倍偏差）。
+ *
+ * @param onConflict 检测到两个字段同时存在时的回调（由调用方决定怎么记日志，便于单测）
+ */
+export function normalizePeriodHours(
+  input: { period_hours?: number | null; period_days?: number | null },
+  onConflict?: (hours: number, days: number) => void,
+): number | null {
+  const rawHours = input.period_hours === undefined || input.period_hours === null ? null : Number(input.period_hours);
+  const rawDays = input.period_days === undefined || input.period_days === null ? null : Number(input.period_days);
+
+  const hours = rawHours !== null && Number.isFinite(rawHours) && rawHours > 0 ? Math.trunc(rawHours) : null;
+  const days = rawDays !== null && Number.isFinite(rawDays) && rawDays > 0 ? Math.trunc(rawDays) : null;
+
+  if (hours !== null && days !== null) {
+    onConflict?.(hours, days);
+    return hours;
+  }
+  if (hours !== null) return hours;
+  if (days !== null) return days * 24;
+  return null;
+}
+
+/**
+ * 小时 → 天（向上取整），用于下发给**仍按天计算**的产品（兼容字段 `period_days`）。
+ *
+ * ⚠️ 向上取整意味着「不足 1 天按 1 天算」：`3` 小时 → `1` 天，产品会多给 21 小时。
+ * 这是兼容期无法避免的精度损失；产品改用 `period_hours` 后即可消除。
+ */
+export function hoursToDaysCeil(hours: number | null): number | null {
+  if (hours === null || !Number.isFinite(hours) || hours <= 0) return null;
+  return Math.ceil(hours / 24);
 }
 
 /**
@@ -248,6 +302,13 @@ export class ProductSyncService {
       seen.push(item.sku_id);
 
       const existing = await this.products.findOne({ where: { productCode, skuId: item.sku_id } });
+      // 周期：新产品报 period_hours（小时），旧产品报 period_days（天）→ 统一折算成小时存库
+      const periodHours = normalizePeriodHours(item, (hours, days) => {
+        this.logger.warn(
+          `[sync] ${productCode}/${item.sku_id} 同时上报了 period_hours=${hours} 与 period_days=${days}，` +
+            `已按 period_hours 为准（忽略 period_days）`,
+        );
+      });
       const payload = {
         productCode,
         skuId: item.sku_id,
@@ -255,7 +316,7 @@ export class ProductSyncService {
         spec: (item.spec ?? null) as Record<string, unknown> | null,
         priceCents: Math.max(0, Math.trunc(Number(item.price_cents) || 0)),
         billingMode: (Number(item.billing_mode) === 2 ? BillingMode.USAGE : BillingMode.PERIOD) as BillingMode,
-        periodDays: item.period_days === undefined || item.period_days === null ? null : Number(item.period_days),
+        periodHours,
         stock: item.stock === undefined || item.stock === null ? null : Number(item.stock),
         isActive: 1,
         // `syncedAt` 不显式写：列上有 DEFAULT CURRENT_TIMESTAMP(3) 与
@@ -371,7 +432,10 @@ export function toProductView(row: ProductEntity): ProductView {
     spec: row.spec,
     price_cents: row.priceCents,
     billing_mode: row.billingMode,
-    period_days: row.periodDays,
+    // 主字段：小时（2026-10-14 起）
+    period_hours: row.periodHours,
+    // 兼容字段：仍按天消费的老前端/老调用方。等前端改完可移除
+    period_days: hoursToDaysCeil(row.periodHours),
     stock: row.stock,
     synced_at: new Date(row.syncedAt).toISOString().replace(/\.\d{3}Z$/, 'Z'),
   };

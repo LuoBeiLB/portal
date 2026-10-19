@@ -6,6 +6,7 @@ import { DataSource, In, LessThan, Repository } from 'typeorm';
 import { PortalConfigService } from '../../config/portal-config.service';
 import { ProductEntity } from '../product/entities/product.entity';
 import { ProductClient, ProvisionError } from '../product/product.client';
+import { hoursToDaysCeil } from '../product/product-sync.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { OrderItemEntity, OrderItemStatus } from './entities/order-item.entity';
 import { ProvisionJobEntity, ProvisionJobStatus } from './entities/provision-job.entity';
@@ -120,17 +121,25 @@ export class ProvisionWorker {
 
     const attempt = job.attempts + 1;
     try {
-      // 周期天数取自商品缓存（订单项只快照了价格，不存周期）
+      // 周期取自商品缓存（订单项只快照了价格，不存周期）
       const product = await this.products.findOne({
         where: { productCode: item.productCode, skuId: item.skuId },
       });
+
+      // 周期单位 2026-10-14 从「天」改为「小时」。
+      // 兼容期**两个字段都下发**：
+      //   · 已改造的产品读 period_hours（精确到小时）
+      //   · 未改造的产品（云存储）继续读 period_days（天，向上取整）
+      // 详见 docs/16-计费周期单位变更-接口与变更说明.md
+      const periodHours = product?.periodHours ?? null;
 
       const result = await this.client.provision(job.productCode, {
         order_item_id: job.orderItemId,
         portal_user_id: job.userId,
         sku_id: item.skuId,
         quantity: item.quantity,
-        period_days: product?.periodDays ?? null,
+        period_hours: periodHours,
+        period_days: hoursToDaysCeil(periodHours),
       });
 
       await this.dataSource.transaction(async (manager) => {

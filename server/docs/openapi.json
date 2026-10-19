@@ -3212,11 +3212,18 @@
             ],
             "example": 1
           },
+          "period_hours": {
+            "type": "number",
+            "description": "周期长度，单位**小时**（2026-10-14 起）。按量计费（`billing_mode=2`）时为 null。\n\n换算：`24` = 1 天、`720` = 30 天、`3` = 3 小时。\n\n**前端展示规则**：`% 24 === 0` 显示「N 天」，否则显示「N 小时」。**不要再按天换算**。",
+            "example": 720,
+            "nullable": true
+          },
           "period_days": {
             "type": "number",
-            "description": "周期天数，按量计费时为 null",
+            "description": "**已废弃（兼容字段）**：周期天数 = `ceil(period_hours / 24)`。仅为尚未改造的调用方保留，新代码请用 `period_hours`。",
             "example": 30,
-            "nullable": true
+            "nullable": true,
+            "deprecated": true
           },
           "stock": {
             "type": "number",
@@ -3237,6 +3244,7 @@
           "spec",
           "price_cents",
           "billing_mode",
+          "period_hours",
           "period_days",
           "stock",
           "synced_at"

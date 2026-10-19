@@ -14,12 +14,25 @@ interface ProductEnvelope<T> {
   data?: T;
 }
 
+/**
+ * 产品上报的商品（`GET /internal/products` 的单项）。
+ *
+ * 周期字段有**两种写法**，兼容期内都认：
+ * - `period_hours`：**新，单位小时**（2026-10-14 起）——`3` = 3 小时、`720` = 30 天
+ * - `period_days`：**旧，单位天**——`30` = 30 天。门户会 ×24 换算成小时
+ *
+ * 两者同时出现时**以 `period_hours` 为准**并打 WARN。
+ * 全部产品迁完后可删掉 `period_days`。
+ */
 export interface RemoteProduct {
   sku_id: string;
   name: string;
   spec: Record<string, unknown>;
   price_cents: number;
   billing_mode: number;
+  /** 周期长度（**小时**）。与 `period_days` 二选一，优先本字段 */
+  period_hours?: number | null;
+  /** @deprecated 周期长度（**天**）。兼容旧产品，门户按 ×24 换算 */
   period_days?: number | null;
   stock?: number | null;
 }
@@ -30,6 +43,18 @@ export interface ProvisionRequest {
   portal_user_id: string;
   sku_id: string;
   quantity: number;
+  /**
+   * 周期长度（**小时**）。新字段，2026-10-14 起下发。
+   * 产品侧应优先用它算到期时间。
+   */
+  period_hours?: number | null;
+  /**
+   * @deprecated 周期长度（**天**）= `ceil(period_hours / 24)`。
+   *
+   * **兼容字段**：云存储等尚未改造的产品仍按天计算到期，所以过渡期内门户**同时下发**。
+   * 产品侧若只认这个字段，等于接受「不足 1 天按 1 天算」的精度损失。
+   * 等所有产品改用 `period_hours` 后可移除。
+   */
   period_days?: number | null;
   extra?: Record<string, unknown>;
 }
@@ -96,6 +121,7 @@ export class ProductClient {
   async fetchProducts(productCode: string): Promise<RemoteProduct[]> {
     const endpoint = this.findByCode(productCode);
     const url = `${endpoint.baseUrl}/internal/products`;
+    console.log(`fetchProducts: GET ${url} (X-Internal-Key=${endpoint.internalKey})`);
     const response = await firstValueFrom(
       this.http.get<ProductEnvelope<{ products: RemoteProduct[] }>>(url, {
         timeout: this.config.shop.productTimeoutMs,

@@ -30,6 +30,8 @@ const MODE = process.env.PROVISION_MODE || 'ok';
 const provisionStore = new Map();
 /** 调用计数：用于 flaky 模式 */
 const attempts = new Map();
+/** 最近一次开通请求体：e2e 用它断言周期字段（period_hours / period_days）下发是否正确 */
+let lastProvision = null;
 
 function send(res, status, body) {
   const payload = JSON.stringify(body);
@@ -101,6 +103,8 @@ const server = http.createServer(async (req, res) => {
     const itemId = String(body.order_item_id ?? '');
     const count = (attempts.get(itemId) ?? 0) + 1;
     attempts.set(itemId, count);
+    // 记录收到的入参，供 e2e 断言「周期字段下发是否正确」（见 GET /__debug/last-provision）
+    lastProvision = { at: Date.now(), body };
     console.log(`[stub] POST /internal/provision item=${itemId} sku=${body.sku_id} mode=${MODE} 第${count}次`);
 
     if (!itemId || !body.sku_id) {
@@ -140,7 +144,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/__reset') {
     provisionStore.clear();
     attempts.clear();
+    lastProvision = null;
     return send(res, 200, { code: 0, message: 'reset', data: null });
+  }
+
+  // 便于自验：回看最近一次开通请求体（断言周期字段下发）
+  if (req.method === 'GET' && url.pathname === '/__debug/last-provision') {
+    return send(res, 200, { code: 0, message: 'ok', data: lastProvision });
   }
 
   send(res, 404, { code: 1001, message: 'not found', data: null });

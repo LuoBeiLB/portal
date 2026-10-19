@@ -1,7 +1,7 @@
 import { PortalConfigService } from '../../config/portal-config.service';
 import { BillingMode, ProductEntity } from './entities/product.entity';
 import { ProductSyncLogEntity } from './entities/product-sync-log.entity';
-import { ProductSyncService } from './product-sync.service';
+import { hoursToDaysCeil, normalizePeriodHours, ProductSyncService, toProductView } from './product-sync.service';
 
 interface FakeRepo {
   find: jest.Mock;
@@ -64,7 +64,7 @@ function row(skuId: string, priceCents: number): ProductEntity {
     spec: null,
     priceCents,
     billingMode: BillingMode.PERIOD,
-    periodDays: 30,
+    periodHours: 720, // 30 天（2026-10-14 起单位改为小时）
     stock: null,
     isActive: 1,
     syncedAt: new Date('2026-10-09T01:00:00Z'),
@@ -212,5 +212,99 @@ describe('ProductSyncService.listForShop —— 目录新鲜度（catalog）', (
     expect(result.list).toHaveLength(0);
     expect(result.catalog.data_synced_at).toBeNull();
     expect(result.catalog.stale).toBe(true);
+  });
+});
+
+describe('周期单位：天 → 小时（2026-10-14）', () => {
+  describe('normalizePeriodHours —— 产品上报字段归一化', () => {
+    it('新字段 period_hours 直接采用（不做任何换算）', () => {
+      expect(normalizePeriodHours({ period_hours: 720 })).toBe(720);
+      expect(normalizePeriodHours({ period_hours: 3 })).toBe(3);
+      expect(normalizePeriodHours({ period_hours: 24 })).toBe(24);
+    });
+
+    it('**旧字段 period_days 按 ×24 换算**（云存储还没改造，走这条）', () => {
+      expect(normalizePeriodHours({ period_days: 30 })).toBe(720);
+      expect(normalizePeriodHours({ period_days: 1 })).toBe(24);
+      expect(normalizePeriodHours({ period_days: 90 })).toBe(2160);
+    });
+
+    it('**两个都填时以 period_hours 为准**，并触发冲突回调', () => {
+      const conflicts: Array<[number, number]> = [];
+      const hours = normalizePeriodHours({ period_hours: 720, period_days: 30 }, (h, d) => conflicts.push([h, d]));
+      expect(hours).toBe(720);
+      expect(conflicts).toEqual([[720, 30]]);
+    });
+
+    it('两个都填但 period_hours 是脏值 → 仍报冲突，且回退到 period_days', () => {
+      const conflicts: Array<[number, number]> = [];
+      // period_hours = 0 视为无效，走 period_days
+      const hours = normalizePeriodHours({ period_hours: 0, period_days: 30 }, (h, d) => conflicts.push([h, d]));
+      expect(hours).toBe(720);
+      // 0 被过滤掉了，所以没有冲突（只有一边有效）
+      expect(conflicts).toEqual([]);
+    });
+
+    it('按量计费（两者都为 null / 缺省）→ null', () => {
+      expect(normalizePeriodHours({})).toBeNull();
+      expect(normalizePeriodHours({ period_hours: null, period_days: null })).toBeNull();
+    });
+
+    it('非正数 / 非法值 → null（不当成 0 或 NaN 存进库）', () => {
+      expect(normalizePeriodHours({ period_hours: 0 })).toBeNull();
+      expect(normalizePeriodHours({ period_hours: -5 })).toBeNull();
+      expect(normalizePeriodHours({ period_days: 0 })).toBeNull();
+      expect(normalizePeriodHours({ period_hours: Number.NaN })).toBeNull();
+    });
+
+    it('小数会被截断为整数（库里是 INT）', () => {
+      expect(normalizePeriodHours({ period_hours: 3.9 })).toBe(3);
+      expect(normalizePeriodHours({ period_days: 1.5 })).toBe(24); // 1.5 天 → 取 1 天 → 24 小时
+    });
+  });
+
+  describe('hoursToDaysCeil —— 下发给仍按天计算的产品', () => {
+    it('整天精确换算', () => {
+      expect(hoursToDaysCeil(24)).toBe(1);
+      expect(hoursToDaysCeil(720)).toBe(30);
+      expect(hoursToDaysCeil(2160)).toBe(90);
+    });
+
+    it('**不足 1 天向上取整**（兼容期的精度损失，产品会多给时间）', () => {
+      expect(hoursToDaysCeil(3)).toBe(1);
+      expect(hoursToDaysCeil(23)).toBe(1);
+      expect(hoursToDaysCeil(25)).toBe(2);
+    });
+
+    it('null / 非正数 → null', () => {
+      expect(hoursToDaysCeil(null)).toBeNull();
+      expect(hoursToDaysCeil(0)).toBeNull();
+      expect(hoursToDaysCeil(-1)).toBeNull();
+    });
+  });
+
+  describe('toProductView —— 对外同时给两个字段', () => {
+    it('period_hours 是主字段，period_days 是它的向上取整派生值', () => {
+      const view = toProductView(row('storage-500g', 50000));
+
+      expect(view.period_hours).toBe(720);
+      expect(view.period_days).toBe(30); // ceil(720/24)
+    });
+
+    it('小时级商品：period_hours=3，period_days 向上取整成 1（兼容字段的固有损失）', () => {
+      const entity = { ...row('desktop-3h', 500), periodHours: 3 };
+      const view = toProductView(entity as ProductEntity);
+
+      expect(view.period_hours).toBe(3);
+      expect(view.period_days).toBe(1);
+    });
+
+    it('按量计费（periodHours=null）→ 两个字段都是 null', () => {
+      const entity = { ...row('storage-usage', 0), periodHours: null };
+      const view = toProductView(entity as ProductEntity);
+
+      expect(view.period_hours).toBeNull();
+      expect(view.period_days).toBeNull();
+    });
   });
 });

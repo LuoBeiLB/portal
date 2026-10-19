@@ -16,6 +16,11 @@ const { loginAdmin } = require('../lib/admin-auth.cjs');
 // 走测试桩用的密钥：用 STUB_* 而不是 PRODUCT_STORAGE_INTERNAL_KEY
 // （后者现在是**真实云存储的密钥**，自验不该打到真实环境）
 const INTERNAL_KEY = process.env.STUB_PRODUCT_INTERNAL_KEY || 'stub-storage-key';
+/**
+ * 产品桩的地址（不是门户地址）。
+ * 只用于打桩的 `/__debug/*` 调试端点，验证「门户下发给产品的入参」是否正确。
+ */
+const STUB_BASE = process.env.STUB_PRODUCT_BASE_URL || 'http://127.0.0.1:8081';
 
 let passed = 0;
 let failed = 0;
@@ -125,7 +130,14 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     const sku = list.find((item) => item.sku_id === 'storage-500g');
     check('含 storage-500g，价格 3000 分', sku?.price_cents === 3000, sku);
     check('spec 原样透传（含 quota_gb）', sku?.spec?.quota_gb === 500, sku?.spec);
-    check('billing_mode / period_days 正确', sku?.billing_mode === 1 && sku?.period_days === 30, sku);
+    // 周期单位 2026-10-14 从「天」改为「小时」。产品桩仍上报 period_days: 30（模拟云存储还没改造），
+    // 门户应换算成 period_hours: 720 存库并对外返回；period_days 作为兼容字段继续给 30。
+    check(
+      'billing_mode 正确 + period_hours=720（30 天换算成小时）',
+      sku?.billing_mode === 1 && sku?.period_hours === 720,
+      { billing_mode: sku?.billing_mode, period_hours: sku?.period_hours },
+    );
+    check('兼容字段 period_days 仍为 30（ceil(720/24)）', sku?.period_days === 30, sku?.period_days);
     const unlimited = list.find((item) => item.sku_id === 'storage-2t');
     check('stock 为 null 的不限量商品正常返回', unlimited?.stock === null, unlimited?.stock);
     const filtered = (await api('/api/shop/products?product_code=phone', { token })).body?.data?.list ?? [];
@@ -221,6 +233,29 @@ async function waitOrderSettled(token, orderId, timeoutMs = 40000) {
     check('开通完成：订单项状态 2 开通成功', settled?.items?.[0]?.status === 2, settled?.items?.[0]);
     check('返回 instance_id 与 expire_at', Boolean(settled?.items?.[0]?.instance_id) && Boolean(settled?.items?.[0]?.expire_at), settled?.items?.[0]);
     check('订单状态 = 2 全部成功', settled?.status === 2, settled?.status);
+
+    // 周期字段下发（2026-10-14 单位改为小时）：
+    // 门户必须**同时下发** period_hours（新，产品侧精确到小时）与 period_days（兼容旧产品如云存储）。
+    // 直接打桩的调试端点（不走 api()，因为它会拼门户 BASE 且会带鉴权头）。
+    let sentBody = null;
+    try {
+      const r = await fetch(`${STUB_BASE}/__debug/last-provision`, {
+        headers: { 'x-internal-key': INTERNAL_KEY },
+      });
+      sentBody = (await r.json())?.data?.body ?? null;
+    } catch {
+      /* 桩没起或端点不可用 → 下面的断言会失败并报出来 */
+    }
+    check(
+      '开通入参带 period_hours=720（新字段，30 天换算成小时）',
+      sentBody?.period_hours === 720,
+      { period_hours: sentBody?.period_hours },
+    );
+    check(
+      '开通入参同时带 period_days=30（兼容云存储等未改造产品）',
+      sentBody?.period_days === 30,
+      { period_days: sentBody?.period_days },
+    );
 
     const repeat = await api(`/api/shop/orders/${orderId}/pay`, { method: 'POST', token });
     check('对已完成订单重复支付 -> 4002（契约 §2.4）', repeat.body.code === 4002, repeat.body);

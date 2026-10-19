@@ -62,13 +62,21 @@ try {
         Write-Warning '  - 未找到便携 Redis，跳过检查'
     }
 
-    Write-Host '=== 3. 重置商品缓存 ==='
+    Write-Host '=== 3. 对测试库跑迁移 + 重置商品缓存 ==='
     # ⚠️ 必须让 reset 也打到**独立测试库**（2026-10-12 修）。
     # 独立库是持久化的，上一次跑完商品还在里面；不清的话本脚本
     # "等测试库出现商品"的循环会立刻通过 —— 于是**根本没触发新的同步**，
     # 后面断言 `data_synced_at ≈ 现在` 就会因为读到上次的旧时间而失败。
     # （DB_DATABASE 原先在第 4 步才设，所以这里清的是运营库，白清。）
     $env:DB_DATABASE = $e2eDatabase
+
+    # 先跑迁移（2026-10-14 修）：测试库是持久化的，**新增迁移后它不会自动跟上**，
+    # 表现为同步日志里 `Unknown column 'XxxEntity.yyy'`，而脚本只会报"等待商品超时"，
+    # 排查方向会跑偏。这一步让 e2e 对新增迁移自愈（幂等，已执行过的会跳过）。
+    Write-Host '  - 对测试库跑迁移（幂等）'
+    & node scripts/e2e/setup-test-db.cjs
+    if ($LASTEXITCODE -ne 0) { throw "测试库迁移失败（exit=$LASTEXITCODE）" }
+
     & node scripts/e2e/reset-products.cjs
 
     Write-Host '=== 4. 起产品桩 + 门户服务 ==='

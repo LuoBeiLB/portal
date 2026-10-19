@@ -39,7 +39,25 @@ export class ProductView {
   @ApiProperty({ description: '计费模式：1 包周期（下单即扣） 2 按量（后付费由产品出账）', enum: [1, 2], example: 1 })
   billing_mode!: number;
 
-  @ApiProperty({ type: Number, description: '周期天数，按量计费时为 null', example: 30, nullable: true })
+  @ApiProperty({
+    type: Number,
+    description:
+      '周期长度，单位**小时**（2026-10-14 起）。按量计费（`billing_mode=2`）时为 null。\n\n' +
+      '换算：`24` = 1 天、`720` = 30 天、`3` = 3 小时。\n\n' +
+      '**前端展示规则**：`% 24 === 0` 显示「N 天」，否则显示「N 小时」。**不要再按天换算**。',
+    example: 720,
+    nullable: true,
+  })
+  period_hours!: number | null;
+
+  @ApiProperty({
+    type: Number,
+    description:
+      '**已废弃（兼容字段）**：周期天数 = `ceil(period_hours / 24)`。仅为尚未改造的调用方保留，新代码请用 `period_hours`。',
+    example: 30,
+    nullable: true,
+    deprecated: true,
+  })
   period_days!: number | null;
 
   @ApiProperty({
