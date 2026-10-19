@@ -38,9 +38,37 @@
  *    （它们读的是 UTC 分量，正好是墙上时间）。
  */
 
-/** 服务器时区相对 UTC 的偏移（分钟）：本机 +08:00 → 480 */
-export function timezoneOffsetMinutes(at: Date = new Date()): number {
-  return -at.getTimezoneOffset();
+/**
+ * 展示时区相对 UTC 的偏移（分钟）：东八区 → 480。
+ *
+ * ⚠️ **不能**用 `-new Date().getTimezoneOffset()`（那读的是进程所在机器的时区）：
+ * 本方案的"墙上时间"口径全靠这个偏移，而开发机是 +08、公网 Linux 常是 UTC。
+ * 用进程时区会导致 `instantToWallIso` 在公网补 0 小时，接口时间整体比库里少 8 小时
+ * （2026-10-14 公网实测：`reviewed_at` 应为 13:50，实际输出 05:50）。
+ *
+ * 因此改为**显式配置** `DISPLAY_TZ_OFFSET_MINUTES`，默认 480（东八区）。
+ * 它与数据库连接参数 `timezone: 'Z'` 是两件事：那个管"读回来怎么解析"，
+ * 这个管"对外输出补多少"，互不影响。
+ */
+const DEFAULT_DISPLAY_TZ_OFFSET_MINUTES = 480;
+
+/**
+ * 把配置值解析成分钟数（纯函数，便于单测）。
+ *
+ * 非法值一律回落默认，避免一个笔误把全站时间带偏：
+ * 空值、非数字、超出合法时区范围（UTC-12:00 ~ UTC+14:00）都走默认。
+ */
+export function resolveDisplayTzOffset(raw: string | undefined | null): number {
+  if (raw === undefined || raw === null || raw.trim() === '') return DEFAULT_DISPLAY_TZ_OFFSET_MINUTES;
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes)) return DEFAULT_DISPLAY_TZ_OFFSET_MINUTES;
+  if (minutes < -12 * 60 || minutes > 14 * 60) return DEFAULT_DISPLAY_TZ_OFFSET_MINUTES;
+  return Math.trunc(minutes);
+}
+
+/** 展示时区偏移（分钟）。来源 `DISPLAY_TZ_OFFSET_MINUTES`，默认 480。 */
+export function timezoneOffsetMinutes(): number {
+  return resolveDisplayTzOffset(process.env.DISPLAY_TZ_OFFSET_MINUTES);
 }
 
 /** `2026-10-12T02:39:58.470Z` 形状的 UTC 墙面时间字符串（写库用） */
@@ -62,7 +90,7 @@ export function databaseGeneratedToInstant(value: Date | string | null | undefin
   if (value === null || value === undefined) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Date(date.getTime() - timezoneOffsetMinutes(date) * 60_000);
+  return new Date(date.getTime() - timezoneOffsetMinutes() * 60_000);
 }
 
 /**
@@ -82,7 +110,7 @@ export function instantToWallIso(value: Date | string | null | undefined): strin
   if (value === null || value === undefined) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  const shifted = new Date(date.getTime() + timezoneOffsetMinutes(date) * 60_000);
+  const shifted = new Date(date.getTime() + timezoneOffsetMinutes() * 60_000);
   return shifted.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
