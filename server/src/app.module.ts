@@ -17,6 +17,7 @@ import { PortalConfigService } from './config/portal-config.service';
 import { TokenModule } from './config/token.module';
 import { PORTAL_ENTITIES } from './database/entities';
 import { AdminModule } from './modules/admin/admin.module';
+import { EnterpriseModule } from './modules/enterprise/enterprise.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InternalModule } from './modules/internal/internal.module';
@@ -64,6 +65,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     AuditModule,
     // 管理端：管理员账号体系（role=admin）+ 运营接口
     AdminModule,
+    EnterpriseModule,
     WalletModule,
     InternalModule,
     ProductModule,

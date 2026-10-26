@@ -5,7 +5,7 @@ import { Request } from 'express';
 
 import { PortalConfigService } from '../../config/portal-config.service';
 import { TokenService } from '../../modules/auth/token.service';
-import { UserRole } from '../../modules/user/entities/user-status.enum';
+import { UserRole, UserType } from '../../modules/user/entities/user-status.enum';
 import { AuthUser } from './current-user.decorator';
 import { BizException, ErrorCode } from '../error/error-code';
 import { IS_PUBLIC_KEY } from './public.decorator';
@@ -40,9 +40,17 @@ export class JwtAuthGuard implements CanActivate {
     const token = extractBearerToken(request);
     if (!token) throw new BizException(ErrorCode.UNAUTHENTICATED);
 
-    let payload: { sub: string; uname: string; role?: string; exp?: number };
+    let payload: { sub: string; uname: string; role?: string; ut?: number; ent?: string; mcp?: number; exp?: number };
     try {
-      payload = await this.jwtService.verifyAsync<{ sub: string; uname: string; role?: string; exp?: number }>(token, {
+      payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        uname: string;
+        role?: string;
+        ut?: number;
+        ent?: string;
+        mcp?: number;
+        exp?: number;
+      }>(token, {
         issuer: this.config.jwt.issuer,
         algorithms: ['RS256'],
       });
@@ -56,11 +64,28 @@ export class JwtAuthGuard implements CanActivate {
       throw new BizException(ErrorCode.UNAUTHENTICATED, 'token 已登出');
     }
 
+    /* 账号性质：旧 token 没有 ut claim → 按个人用户处理（兼容增量上线） */
+    const userType = payload.ut === UserType.ENTERPRISE_STAFF ? UserType.ENTERPRISE_STAFF : UserType.PERSONAL;
+    const enterpriseId = payload.ent ? String(payload.ent) : null;
+
+    /*
+     * ⚠️ 企业员工但没有企业归属 → 直接拒绝。
+     *
+     * 不能"降级成个人域"：那会让写入落到 enterprise_id = 0 下，形成谁都不该看到、
+     * 又确实存在的数据。这里宁可不让他用，让他重新登录拿一张完整 token。
+     */
+    if (userType === UserType.ENTERPRISE_STAFF && !enterpriseId) {
+      throw new BizException(ErrorCode.UNAUTHENTICATED, '企业员工 token 缺少企业归属，请重新登录');
+    }
+
     // 旧版 token 没有 role claim → 一律按普通用户处理（绝不因为缺失就放行管理员）
     request.user = {
       id: payload.sub,
       username: payload.uname,
       role: payload.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.USER,
+      userType,
+      enterpriseId,
+      mustChangePassword: payload.mcp === 1,
     };
     return true;
   }

@@ -1,6 +1,6 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
-import { UserRole, UserStatus } from './user-status.enum';
+import { UserRole, UserStatus, UserType } from './user-status.enum';
 
 /**
  * u_user 门户用户（普通用户与管理员**同一张表**，用 `role` 区分）。
@@ -38,6 +38,35 @@ export class UserEntity {
   })
   role!: UserRole;
 
+  /**
+   * 账号性质（2026-10-19 新增）：0 个人 / 1 企业员工。
+   *
+   * 与 `role` 正交，**不是**权限维度。企业员工不能自助充值、不能下单。
+   */
+  @Column({
+    name: 'user_type',
+    type: 'tinyint',
+    default: UserType.PERSONAL,
+    comment: '0 个人 / 1 企业员工（注册接口写死 0，不接受请求体传入）',
+  })
+  userType!: UserType;
+
+  /**
+   * 所属企业（2026-10-19 新增）。**企业归属的权威来源在门户**，
+   * 产品侧只按 JWT 的 `ent` 建租户上下文，不存真值。
+   *
+   * 组合约束（DB CHECK 兜底，见迁移 1760000000000-EnterpriseAccounts）：
+   * `user_type=1` ⇒ 非空；`user_type=0` ⇒ 为空。
+   */
+  @Column({
+    name: 'enterprise_id',
+    type: 'bigint',
+    unsigned: true,
+    nullable: true,
+    comment: '所属企业；user_type=1 时必填，user_type=0 时必须为空',
+  })
+  enterpriseId!: string | null;
+
   @Column({
     name: 'status',
     type: 'smallint',
@@ -45,6 +74,19 @@ export class UserEntity {
     comment: '0 正常 1 禁用',
   })
   status!: UserStatus;
+
+  /**
+   * 首登必须改密（2026-10-19 新增）。
+   *
+   * 企业管理员给员工建号时发的是**初始密码**，首次登录必须自行修改；改密成功后清零。
+   */
+  @Column({
+    name: 'must_change_password',
+    type: 'tinyint',
+    default: 0,
+    comment: '1 首登必须改密（企业管理员建号时置 1，改密成功后清零）',
+  })
+  mustChangePassword!: number;
 
   @Column({ name: 'created_at', type: 'datetime', precision: 3, default: () => 'CURRENT_TIMESTAMP(3)' })
   createdAt!: Date;

@@ -788,6 +788,393 @@
         ]
       }
     },
+    "/api/admin/enterprises": {
+      "get": {
+        "operationId": "EnterpriseAdminController_list",
+        "summary": "企业列表",
+        "description": "支持按状态与关键词（编码/名称）筛选。`owner_user_id` 为 null 表示还在 pending（未指定所有者，不可用）。",
+        "parameters": [
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "按企业编码或名称模糊搜索",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "状态筛选",
+            "schema": {
+              "example": "active",
+              "enum": [
+                "pending",
+                "active",
+                "disabled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "企业列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseListView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "EnterpriseAdminController_create",
+        "summary": "建企业（流程①）",
+        "description": "只创建企业记录，状态为 `pending`、所有者留空。\n\n**不创建任何角色** —— 角色是云存储的产品概念，由它在企业首次被访问时惰性初始化（docs/18 §4.2.1）。\n\n建完必须再用「指定所有者」接口把企业激活，否则该企业的账号一律登录失败（`2007`）。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnterpriseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/enterprises/{id}/owner": {
+      "post": {
+        "operationId": "EnterpriseAdminController_assignOwner",
+        "summary": "指定 / 移交企业所有者（流程②）",
+        "description": "把某账号设为该企业所有者：**唯一管理员 + 资源默认持有人**。\n\n首次指定会把企业从 `pending` 置为 `active`；**移交**（企业原来已有所有者）会吊销旧所有者全部会话，让他重新登录以拿到正确的身份。\n\n四条校验：不能是平台管理员 / 不能已属于其他企业 / 不能被禁用 / 已有所有者时按移交处理。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignOwnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "指定结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerAssignedView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/users/{id}/enterprise": {
+      "post": {
+        "operationId": "EnterpriseUserAdminController_assign",
+        "summary": "把已有账号分配 / 调整到某企业",
+        "description": "只改归属（`user_type` 置 1 + 绑定企业），**不改变所有者**。\n\n成功后吊销该账号全部会话 —— 否则他手里的 token 还带着旧的企业归属。\n\n目标企业必须是 `active`；目标账号不能是平台管理员、不能已属于其他企业。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignUserEnterpriseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的企业成员",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseUserView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/enterprise/users": {
+      "get": {
+        "operationId": "EnterpriseOwnerController_listUsers",
+        "summary": "本企业员工列表",
+        "description": "**只返回当前所有者所在企业**的账号。跨企业的 id 一律查不到（按\"不存在\"处理）。",
+        "parameters": [
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "按登录账号或手机号模糊搜索",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "员工列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseUserListView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "企业端 enterprise（所有者）"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "EnterpriseOwnerController_createUser",
+        "summary": "新建本企业员工（流程③）",
+        "description": "企业归属**由登录态决定**：新账号自动落到当前所有者所在企业，请求体里即便传 `enterprise_id` 也会被忽略（DTO 里没有这个字段）。\n\n`user_type` 固定为 1（企业员工），首登强制改密。\n\n返回的 `initial_password` **只在这里出现一次**，服务端只存 argon2id 哈希，之后就查不到了。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnterpriseUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建结果（含一次性初始密码）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseUserCreatedView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "企业端 enterprise（所有者）"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/enterprise/users/{id}/reset-password": {
+      "post": {
+        "operationId": "EnterpriseOwnerController_resetPassword",
+        "summary": "重置本企业员工密码",
+        "description": "生成新的初始密码、置首登强制改密、并**吊销该员工全部会话**（所有设备强制重登）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "重置结果（含一次性初始密码）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseUserPasswordResetView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "企业端 enterprise（所有者）"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/enterprise/users/{id}/status": {
+      "post": {
+        "operationId": "EnterpriseOwnerController_setStatus",
+        "summary": "停用 / 恢复本企业员工",
+        "description": "停用会吊销该员工全部会话，效果是\"立即下线\"。\n\n⚠️ **企业所有者本人不能被停用** —— 否则企业变成无人可管，而 `owner_user_id` 又不能指向一个停用账号。要停用必须先移交所有者。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterpriseUserStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "变更结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseUserStatusView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "企业端 enterprise（所有者）"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/wallet/balance": {
       "get": {
         "operationId": "WalletController_balance",
@@ -1869,13 +2256,30 @@
               1
             ],
             "example": 0
+          },
+          "user_type": {
+            "type": "number",
+            "description": "账号性质（2026-10-19 新增）：`0` 个人 · `1` 企业员工。\n\n**企业员工不能自助充值、不能下单**，且必须带 `enterprise_id`。产品侧代理登录时据此分流。",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "enterprise_id": {
+            "type": "string",
+            "description": "所属企业 id；个人用户为 `null`。产品侧建租户上下文的依据（也等价于 JWT 的 `ent`）",
+            "nullable": true,
+            "example": null
           }
         },
         "required": [
           "id",
           "username",
           "role",
-          "status"
+          "status",
+          "user_type",
+          "enterprise_id"
         ]
       },
       "RegisterResultView": {
@@ -2590,6 +2994,430 @@
         },
         "required": [
           "new_password"
+        ]
+      },
+      "EnterpriseView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "企业 id（**string**）",
+            "example": "1"
+          },
+          "code": {
+            "type": "string",
+            "description": "企业编码",
+            "example": "acme"
+          },
+          "name": {
+            "type": "string",
+            "description": "企业名称",
+            "example": "云存储公司"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：`pending` 待指定所有者（不可用）· `active` 正常 · `disabled` 已停用",
+            "enum": [
+              "pending",
+              "active",
+              "disabled"
+            ],
+            "example": "active"
+          },
+          "quota_bytes": {
+            "type": "string",
+            "description": "企业总配额（字节，0 = 不限）",
+            "example": "1099511627776"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "description": "企业所有者 `u_user.id`；`null` 表示还没有所有者（企业不可用）",
+            "nullable": true,
+            "example": "01a123fc-c68a-762c-ac55-de911541ab67"
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "服务到期时间（UTC ISO 8601）；无到期时间为 null",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-19T02:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "status",
+          "quota_bytes",
+          "owner_user_id",
+          "expire_at",
+          "created_at"
+        ]
+      },
+      "EnterpriseListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数（带筛选时为筛选后的数量）",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "企业列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnterpriseView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "CreateEnterpriseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "企业编码，对接用；建好后不可改",
+            "example": "acme",
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "description": "企业名称",
+            "example": "云存储公司",
+            "maxLength": 128
+          },
+          "quota_bytes": {
+            "type": "number",
+            "description": "企业总配额（字节，0 = 不限），默认 0",
+            "example": 1099511627776
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "服务到期时间（ISO 8601），可空",
+            "example": "2027-10-19T00:00:00Z"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ]
+      },
+      "AssignOwnerDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "目标账号的 `u_user.id`（UUID36）。必须是本企业员工或可转为员工的个人账号；不能是平台管理员",
+            "example": "01a123fc-c68a-762c-ac55-de911541ab67"
+          }
+        },
+        "required": [
+          "user_id"
+        ]
+      },
+      "OwnerAssignedView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定 `true`",
+            "example": true
+          },
+          "enterprise_id": {
+            "type": "string",
+            "description": "企业 id",
+            "example": "1"
+          },
+          "status": {
+            "type": "string",
+            "description": "变更后的状态：正常情况下为 `active`",
+            "enum": [
+              "pending",
+              "active",
+              "disabled"
+            ]
+          },
+          "owner_user_id": {
+            "type": "string",
+            "description": "新的所有者 `u_user.id`",
+            "example": "01a123fc-c68a-762c-ac55-de911541ab67"
+          },
+          "transferred": {
+            "type": "boolean",
+            "description": "是否为「移交」（企业原来已有所有者）。`false` 表示首次指定",
+            "example": false
+          },
+          "revoked_sessions": {
+            "type": "number",
+            "description": "本次被吊销的会话数（**换所有者后旧所有者必须重登**）",
+            "example": 1
+          }
+        },
+        "required": [
+          "ok",
+          "enterprise_id",
+          "status",
+          "owner_user_id",
+          "transferred",
+          "revoked_sessions"
+        ]
+      },
+      "AssignUserEnterpriseDto": {
+        "type": "object",
+        "properties": {
+          "enterprise_id": {
+            "type": "string",
+            "description": "目标企业 id（`enterprise.id`）",
+            "example": "1"
+          }
+        },
+        "required": [
+          "enterprise_id"
+        ]
+      },
+      "EnterpriseUserView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "用户 id",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "登录账号",
+            "example": "liming"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号；未绑定时为 null",
+            "nullable": true,
+            "example": "13800000001"
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "is_owner": {
+            "type": "boolean",
+            "description": "是否为该企业所有者",
+            "example": false
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "是否首次登录必须改密（企业管理员建的号初始为 `true`）",
+            "example": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-19T02:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "phone",
+          "status",
+          "is_owner",
+          "must_change_password",
+          "created_at"
+        ]
+      },
+      "EnterpriseUserListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数（带筛选时为筛选后的数量）",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "员工列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnterpriseUserView"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "CreateEnterpriseUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "登录账号（企业内唯一；全库唯一约束仍在，见契约 §1.1）",
+            "example": "liming",
+            "maxLength": 64
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号（可空）",
+            "example": "13800000001"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      },
+      "EnterpriseUserCreatedView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "新建用户 id",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "登录账号",
+            "example": "liming"
+          },
+          "enterprise_id": {
+            "type": "string",
+            "description": "所属企业 id（**由登录态决定，不来自请求体**）",
+            "example": "1"
+          },
+          "initial_password": {
+            "type": "string",
+            "description": "初始密码（仅本次返回）",
+            "example": "Kx7m-Pq2Rt"
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "首次登录是否必须改密；新建企业员工固定为 `true`",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "enterprise_id",
+          "initial_password",
+          "must_change_password"
+        ]
+      },
+      "EnterpriseUserPasswordResetView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定 `true`",
+            "example": true
+          },
+          "initial_password": {
+            "type": "string",
+            "description": "重置后的初始密码（仅本次返回）",
+            "example": "Kx7m-Pq2Rt"
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "首次登录是否必须改密；固定为 `true`",
+            "example": true
+          },
+          "revoked_sessions": {
+            "type": "number",
+            "description": "本次被吊销的会话数（该员工所有设备强制重登）",
+            "example": 2
+          }
+        },
+        "required": [
+          "ok",
+          "initial_password",
+          "must_change_password",
+          "revoked_sessions"
+        ]
+      },
+      "EnterpriseUserStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "目标状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 1
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "EnterpriseUserStatusView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定 `true`",
+            "example": true
+          },
+          "status": {
+            "type": "number",
+            "description": "变更后的状态：`0` 正常 · `1` 禁用",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 1
+          },
+          "revoked_sessions": {
+            "type": "number",
+            "description": "本次被吊销的会话数（禁用会强制下线；启用不恢复登录态）",
+            "example": 2
+          },
+          "is_owner": {
+            "type": "boolean",
+            "description": "目标是否为企业所有者。所有者**不允许被停用**（服务端会拒绝），所以正常返回时为 `false`",
+            "example": false
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "revoked_sessions",
+          "is_owner"
         ]
       },
       "BalanceView": {

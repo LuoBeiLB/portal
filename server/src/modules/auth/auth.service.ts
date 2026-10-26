@@ -4,7 +4,9 @@ import { DataSource, Repository } from 'typeorm';
 
 import { uuidv7 } from '../../common/util/crypto.util';
 import { BizException, ErrorCode } from '../../common/error/error-code';
-import { UserRole, UserStatus } from '../user/entities/user-status.enum';
+import { EnterpriseStatus } from '../enterprise/entities/enterprise.entity';
+import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
+import { UserRole, UserStatus, UserType } from '../user/entities/user-status.enum';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { LoginDto } from './dto/login.dto';
@@ -33,6 +35,16 @@ export interface AuthUserView {
   role: UserRole;
   /** 0 正常 / 1 禁用（契约 §0.6 的 2004 对应禁用态） */
   status: UserStatus;
+
+  /**
+   * 账号性质（2026-10-19 新增）：0 个人 / 1 企业员工。
+   *
+   * 产品侧代理登录时要立刻知道：企业员工不能充值、不能下单，且必须带企业归属。
+   */
+  user_type: UserType;
+
+  /** 所属企业 id；个人用户为 null */
+  enterprise_id: string | null;
 }
 
 export interface AuthResult {
@@ -44,6 +56,7 @@ export interface AuthResult {
 export class AuthService {
   constructor(
     @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
+    @InjectRepository(EnterpriseEntity) private readonly enterprises: Repository<EnterpriseEntity>,
     private readonly dataSource: DataSource,
     private readonly password: PasswordService,
     private readonly tokens: TokenService,
@@ -94,11 +107,11 @@ export class AuthService {
     }
 
     const user = await this.users.findOneOrFail({ where: { id } });
-    const tokens = await this.issueTokens(user.id, user.username, user.role);
+    const tokens = await this.issueTokens(user);
 
     return {
       tokens,
-      user: { id: user.id, username: user.username, role: user.role, status: user.status },
+      user: toAuthUserView(user),
       profile: {
         id: user.id,
         username: user.username,
@@ -121,8 +134,11 @@ export class AuthService {
     const ok = await this.password.verify(user.passwordHash, dto.password);
     if (!ok) throw new BizException(ErrorCode.BAD_CREDENTIALS);
 
-    const tokens = await this.issueTokens(user.id, user.username, user.role);
-    return { tokens, user: { id: user.id, username: user.username, role: user.role, status: user.status } };
+    // 企业员工还必须所属企业可用：pending（还没指定所有者）/ disabled（已停用）一律 2007
+    await this.assertEnterpriseUsable(user);
+
+    const tokens = await this.issueTokens(user);
+    return { tokens, user: toAuthUserView(user) };
   }
 
   /**
@@ -142,12 +158,18 @@ export class AuthService {
       throw new BizException(ErrorCode.ACCOUNT_DISABLED);
     }
 
-    const access = await this.tokens.issueAccessToken(user.id, user.username, user.role);
+    await this.assertEnterpriseUsable(user);
+
+    const access = await this.tokens.issueAccessToken(user.id, user.username, user.role, {
+      userType: user.userType,
+      enterpriseId: user.enterpriseId,
+      mustChangePassword: user.mustChangePassword,
+    });
     return {
       access_token: access.accessToken,
       expires_in: access.expiresIn,
       refresh_token: rawToken,
-      user: { id: user.id, username: user.username, role: user.role, status: user.status },
+      user: toAuthUserView(user),
     };
   }
 
@@ -191,17 +213,59 @@ export class AuthService {
     const passwordHash = await this.password.hash(newPassword);
     // `updated_at` 交给库：列上有 ON UPDATE CURRENT_TIMESTAMP(3)，只要本次 UPDATE
     // 改了别的列就会自动刷新（已实测，见 (已删的排查脚本)）
-    await this.users.update({ id: user.id }, { passwordHash });
+    await this.users.update({ id: user.id }, { passwordHash, mustChangePassword: 0 });
 
     const revoked = await this.tokens.revokeAllSessions(user.id);
     return { ok: true, revoked_sessions: revoked };
   }
 
-  private async issueTokens(userId: string, username: string, role: UserRole): Promise<AuthTokens> {
-    const access = await this.tokens.issueAccessToken(userId, username, role);
-    const refreshToken = await this.tokens.issueRefreshToken(userId);
+  /**
+   * 企业员工必须所属企业可用。
+   *
+   * - 个人用户（user_type=0）直接放行
+   * - `enterprise_id` 为空 → 2007（DB CHECK 已经拦住这种数据，这里是防御性判断）
+   * - 企业不存在 / status 不是 `active` → 2007
+   *
+   * 登录与刷新**都要**校验：只校验登录的话，企业被停用后用户还能靠 refresh 无限续期。
+   */
+  private async assertEnterpriseUsable(user: UserEntity): Promise<void> {
+    if (user.userType !== UserType.ENTERPRISE_STAFF) return;
+
+    if (!user.enterpriseId) {
+      throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE, '企业员工账号缺少企业归属');
+    }
+    const enterprise = await this.enterprises.findOne({ where: { id: String(user.enterpriseId) } });
+    if (!enterprise || enterprise.status !== EnterpriseStatus.ACTIVE) {
+      throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE);
+    }
+  }
+
+  private async issueTokens(user: UserEntity): Promise<AuthTokens> {
+    const access = await this.tokens.issueAccessToken(user.id, user.username, user.role, {
+      userType: user.userType,
+      enterpriseId: user.enterpriseId,
+      mustChangePassword: user.mustChangePassword,
+    });
+    const refreshToken = await this.tokens.issueRefreshToken(user.id);
     return { access_token: access.accessToken, expires_in: access.expiresIn, refresh_token: refreshToken };
   }
+}
+
+/**
+ * 登录/注册/刷新响应里的 user 形状（三处共用，避免改一处漏两处）。
+ *
+ * `enterprise_id` 统一转成 **string**：TypeORM 的 bigint 读出来本来就是字符串，
+ * 但实体字段声明成 `string | null` 后仍要防 `null`，这里一次性收口。
+ */
+function toAuthUserView(user: UserEntity): AuthUserView {
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    status: user.status,
+    user_type: user.userType ?? UserType.PERSONAL,
+    enterprise_id: user.enterpriseId ? String(user.enterpriseId) : null,
+  };
 }
 
 export interface RegisterProfile {

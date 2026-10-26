@@ -66,6 +66,23 @@ export class LoginUserView {
     example: 0,
   })
   status!: number;
+
+  @ApiProperty({
+    description:
+      '账号性质（2026-10-19 新增）：`0` 个人 · `1` 企业员工。\n\n' +
+      '**企业员工不能自助充值、不能下单**，且必须带 `enterprise_id`。产品侧代理登录时据此分流。',
+    enum: [0, 1],
+    example: 0,
+  })
+  user_type!: number;
+
+  @ApiProperty({
+    description: '所属企业 id；个人用户为 `null`。产品侧建租户上下文的依据（也等价于 JWT 的 `ent`）',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  enterprise_id!: string | null;
 }
 
 /** 注册成功（契约 §1.1）：档案字段在顶层 + 令牌 + 用户摘要 */

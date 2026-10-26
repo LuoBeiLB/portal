@@ -52,7 +52,14 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
     });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
     // 2026-10-10 起守卫额外写入 role；旧版 token 没有 role claim → 一律按普通用户（绝不因此放行管理员）
-    expect(request.user).toEqual({ id: 'user-1', username: 'luobo', role: 'user' });
+    expect(request.user).toEqual({
+      id: 'user-1',
+      username: 'luobo',
+      role: 'user',
+      userType: 0,
+      enterpriseId: null,
+      mustChangePassword: false,
+    });
   });
 
   it('JWT 带 role=admin 时写入 request.user.role（管理端鉴权靠它）', async () => {
@@ -60,7 +67,54 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
     const { ctx, reflector } = contextOf(request);
     const guard = guardOf(reflector, () => Promise.resolve({ sub: 'admin-1', uname: 'admin', role: 'admin' }));
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
-    expect(request.user).toEqual({ id: 'admin-1', username: 'admin', role: 'admin' });
+    expect(request.user).toEqual({
+      id: 'admin-1',
+      username: 'admin',
+      role: 'admin',
+      userType: 0,
+      enterpriseId: null,
+      mustChangePassword: false,
+    });
+  });
+
+  it('JWT 带 ut=1 + ent=N → 写入企业归属（产品侧据此建租户上下文）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () =>
+      Promise.resolve({ sub: 'staff-1', uname: 'liming', role: 'user', ut: 1, ent: '42' }),
+    );
+
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(request.user).toMatchObject({ id: 'staff-1', userType: 1, enterpriseId: '42' });
+  });
+
+  it('**ut=1 但缺 ent → 1002**（不能退化成个人域，否则企业数据会写到 enterprise_id=0 下）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () => Promise.resolve({ sub: 'staff-1', uname: 'liming', role: 'user', ut: 1 }));
+
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({ code: ErrorCode.UNAUTHENTICATED });
+    expect(request.user).toBeUndefined();
+  });
+
+  it('ut=0（或缺失）→ 按个人用户处理，enterpriseId 为 null', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () => Promise.resolve({ sub: 'user-1', uname: 'luobo', role: 'user', ut: 0 }));
+
+    await guard.canActivate(ctx);
+    expect(request.user).toMatchObject({ userType: 0, enterpriseId: null });
+  });
+
+  it('mcp=1 → mustChangePassword 为 true（首登强制改密）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () =>
+      Promise.resolve({ sub: 'staff-1', uname: 'liming', role: 'user', ut: 1, ent: '42', mcp: 1 }),
+    );
+
+    await guard.canActivate(ctx);
+    expect(request.user?.mustChangePassword).toBe(true);
   });
 
   it('role 值非法（如伪造 "ADMIN" / 任意字符串）时降级为普通用户', async () => {

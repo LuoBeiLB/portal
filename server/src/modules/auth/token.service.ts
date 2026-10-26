@@ -19,6 +19,26 @@ export interface AccessTokenPayload {
    * （禁用/降权时我们会吊销该用户全部 refresh 会话，所以实际生效更快。）
    */
   role: UserRole;
+
+  /**
+   * 账号性质（2026-10-19 新增）：0 个人 / 1 企业员工。
+   *
+   * 产品侧据此决定走个人域还是企业域。**缺失按 0 处理** —— 兼容增量上线期间
+   * 已签发的旧 token。
+   */
+  ut?: number;
+
+  /**
+   * 企业 id（2026-10-19 新增）。仅 `ut = 1` 的企业员工才有。
+   *
+   * 产品侧靠它建立租户上下文（每张表、每条 SQL 都按它隔离）。
+   * **`ut = 1` 但缺 `ent` 时产品侧必须拒绝**，不能退化成个人域 ——
+   * 否则企业数据会落到 `enterprise_id = 0` 下。
+   */
+  ent?: string;
+
+  /** 首登必须改密（2026-10-19 新增）：为 1 时只应放行改密接口 */
+  mcp?: number;
 }
 
 export interface AccessTokenIssued {
@@ -48,10 +68,20 @@ export class TokenService {
     private readonly config: PortalConfigService,
   ) {}
 
-  async issueAccessToken(userId: string, username: string, role: UserRole): Promise<AccessTokenIssued> {
+  async issueAccessToken(
+    userId: string,
+    username: string,
+    role: UserRole,
+    extra?: { userType?: number; enterpriseId?: string | null; mustChangePassword?: number },
+  ): Promise<AccessTokenIssued> {
     const expiresIn = this.config.jwt.accessTtlSeconds;
+    // 只在有值时才写入可选 claim，避免 JWT 里出现一堆 null 字段
+    const claims: AccessTokenPayload = { sub: userId, uname: username, role, ut: extra?.userType ?? 0 };
+    if (extra?.enterpriseId) claims.ent = String(extra.enterpriseId);
+    if (extra?.mustChangePassword) claims.mcp = 1;
+
     const accessToken = await this.jwtService.signAsync(
-      { sub: userId, uname: username, role },
+      claims,
       {
         algorithm: 'RS256',
         issuer: this.config.jwt.issuer,

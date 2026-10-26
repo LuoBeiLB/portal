@@ -1,7 +1,7 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 
-import { UserRole } from '../../modules/user/entities/user-status.enum';
+import { UserRole, UserType } from '../../modules/user/entities/user-status.enum';
 
 /** 当前登录用户（由 JwtAuthGuard 注入） */
 export interface AuthUser {
@@ -13,6 +13,13 @@ export interface AuthUser {
    * 管理端鉴权与审计日志里的"操作人"都以此为准。
    */
   role: UserRole;
+
+  /** 账号性质：0 个人 / 1 企业员工（来自 JWT 的 ut，缺失按 0） */
+  userType: UserType;
+  /** 企业 id（来自 JWT 的 ent）；个人用户与非法 token 为 null */
+  enterpriseId: string | null;
+  /** 首登必须改密（来自 JWT 的 mcp） */
+  mustChangePassword: boolean;
 }
 
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): AuthUser => {

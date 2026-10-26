@@ -31,6 +31,18 @@ export enum AuditAction {
   RECONCILIATION_RUN = 'reconciliation_run',
   /** 人工调账（第二批实现） */
   WALLET_ADJUST = 'wallet_adjust',
+  /* ── 企业（2026-10-19 新增，见 docs/24 M1）── */
+  /** 建企业（流程①） */
+  ENTERPRISE_CREATE = 'enterprise_create',
+  /** 指定 / 移交企业所有者（流程②） */
+  ENTERPRISE_OWNER_ASSIGN = 'enterprise_owner_assign',
+  /** 管理端把已有账号分配 / 调整企业 */
+  ENTERPRISE_USER_ASSIGN = 'enterprise_user_assign',
+  /** 企业所有者建本企业员工（流程③） */
+  ENTERPRISE_USER_CREATE = 'enterprise_user_create',
+  /** 企业内重置员工密码 */
+  ENTERPRISE_USER_PASSWORD_RESET = 'enterprise_user_password_reset',
+
   /** 系统自动动作（如环境变量 bootstrap 建首个管理员） */
   SYSTEM_BOOTSTRAP = 'system_bootstrap',
 }

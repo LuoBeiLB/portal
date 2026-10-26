@@ -17,6 +17,16 @@ export enum ErrorCode {
   BAD_CREDENTIALS = 2003,
   ACCOUNT_DISABLED = 2004,
 
+  // 企业（2026-10-19 新增，对应 docs/24 §1.4）
+  /** 企业不存在或不是 active（pending 未指定所有者 / disabled 已停用） */
+  ENTERPRISE_UNAVAILABLE = 2007,
+  /** 该账号已属于其他企业；一个账号只能属于一家 */
+  USER_ALREADY_IN_ENTERPRISE = 2008,
+  /** 该企业已有所有者；换人必须走「移交」而不是再指定一个 */
+  ENTERPRISE_OWNER_EXISTS = 2009,
+  /** 该接口仅企业所有者可调用 */
+  OWNER_ONLY = 2010,
+
   // 钱包
   INSUFFICIENT_BALANCE = 3001,
   WALLET_FROZEN = 3002,
@@ -45,6 +55,10 @@ export const ERROR_MESSAGES: Record<number, string> = {
   [ErrorCode.PHONE_REGISTERED]: '手机号已注册',
   [ErrorCode.BAD_CREDENTIALS]: '账号或密码错误',
   [ErrorCode.ACCOUNT_DISABLED]: '账号被禁用',
+  [ErrorCode.ENTERPRISE_UNAVAILABLE]: '企业不存在或已停用',
+  [ErrorCode.USER_ALREADY_IN_ENTERPRISE]: '账号已属于其他企业',
+  [ErrorCode.ENTERPRISE_OWNER_EXISTS]: '企业已有所有者，请走移交',
+  [ErrorCode.OWNER_ONLY]: '该操作仅企业所有者可执行',
   [ErrorCode.INSUFFICIENT_BALANCE]: '余额不足',
   [ErrorCode.WALLET_FROZEN]: '钱包冻结',
   [ErrorCode.IDEMPOTENT_REPEATED]: '幂等重复（非错误）',
