@@ -1744,6 +1744,67 @@
         ]
       }
     },
+    "/api/internal/enterprise-accounts": {
+      "get": {
+        "operationId": "InternalEnterpriseAccountController_list",
+        "summary": "拉取某企业的账号池（产品侧\"加入成员\"用）",
+        "description": "产品 → 门户。返回该企业的候选账号，供产品侧\"把门户账号加入本企业\"时挑人。\n\n**只返回 `enterprise_id` 指定的那一家企业**；企业不是 `active` 时返回 `2007`。\n\n`keyword` 同时匹配登录账号与手机号；`limit` 默认 50、上限 200。\n\n错误：`1004` 密钥无效 / 密钥与自报 `product_code` 不一致、`2007` 企业不存在或未激活、`1001` 参数错误。",
+        "parameters": [
+          {
+            "name": "enterprise_id",
+            "required": true,
+            "in": "query",
+            "description": "企业 id（`enterprise.id`）。**只返回这家企业的账号**，不接受通配",
+            "schema": {
+              "example": "1",
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "按登录账号或手机号模糊搜索（产品侧\"加入成员\"的搜索框）",
+            "schema": {
+              "example": "li",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "最多返回多少条。默认 50，上限 200 —— 这是\"选人\"用的下拉框，不是列表页",
+            "schema": {
+              "maximum": 200,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一响应壳，data 为账号池",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalEnterpriseAccountListView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "内网 · 企业账号 internal"
+        ],
+        "security": [
+          {
+            "internal-key": []
+          }
+        ]
+      }
+    },
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
@@ -3991,6 +4052,91 @@
         "required": [
           "success",
           "balance_cents"
+        ]
+      },
+      "InternalEnterpriseAccountView": {
+        "type": "object",
+        "properties": {
+          "portal_user_id": {
+            "type": "string",
+            "description": "门户用户 UUID。产品侧拿它建 `portal_user_map` 映射（**唯一标识，不是 username**）",
+            "example": "01a11e65-3a34-7578-95a7-ebfdd8cd731c"
+          },
+          "username": {
+            "type": "string",
+            "description": "登录账号（展示用；两家企业可以重名，所以不能用它做标识）",
+            "example": "liming"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号；未绑定时为 null",
+            "nullable": true,
+            "example": "13800000001"
+          },
+          "enterprise_id": {
+            "type": "string",
+            "description": "所属企业 id（与请求参数一致）",
+            "example": "1"
+          },
+          "user_type": {
+            "type": "number",
+            "description": "账号性质：`0` 个人 · `1` 企业员工。这里只会出现 `1`（查询已按企业过滤）",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 1
+          },
+          "status": {
+            "type": "number",
+            "description": "状态：`0` 正常 · `1` 禁用。**产品侧应把禁用账号置灰但仍展示** —— 它可能已经有文件在自家库里",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          }
+        },
+        "required": [
+          "portal_user_id",
+          "username",
+          "phone",
+          "enterprise_id",
+          "user_type",
+          "status"
+        ]
+      },
+      "InternalEnterpriseAccountListView": {
+        "type": "object",
+        "properties": {
+          "enterprise_id": {
+            "type": "string",
+            "description": "所属企业 id",
+            "example": "1"
+          },
+          "total": {
+            "type": "number",
+            "description": "符合条件的总数（不受 `limit` 影响）",
+            "example": 14
+          },
+          "returned": {
+            "type": "number",
+            "description": "本次返回条数（≤ limit）",
+            "example": 12
+          },
+          "list": {
+            "description": "候选账号列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalEnterpriseAccountView"
+            }
+          }
+        },
+        "required": [
+          "enterprise_id",
+          "total",
+          "returned",
+          "list"
         ]
       },
       "ProductView": {

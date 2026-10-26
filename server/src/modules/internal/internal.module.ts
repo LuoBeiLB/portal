@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletModule } from '../wallet/wallet.module';
+import { InternalEnterpriseAccountController } from './internal-enterprise.controller';
 import { InternalWalletController } from './internal-wallet.controller';
 
 /**
@@ -10,9 +12,12 @@ import { InternalWalletController } from './internal-wallet.controller';
  *
  * ⚠️ 这些接口靠 X-Internal-Key 鉴权，**必须确保不对公网暴露**（防火墙/nginx 层控制）。
  * §5（门户 → 产品：商品目录拉取、开通）是**出站调用**，实现在 ProductClient 里，不在本模块。
+ *
+ * 2026-10-19 新增 `InternalEnterpriseAccountController`：给产品侧拉某企业的账号池
+ * （`docs/24` §1.2）。它需要 `EnterpriseEntity` 仓储来校验企业是否 active。
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity]), WalletModule],
-  controllers: [InternalWalletController],
+  imports: [TypeOrmModule.forFeature([UserEntity, EnterpriseEntity]), WalletModule],
+  controllers: [InternalWalletController, InternalEnterpriseAccountController],
 })
 export class InternalModule {}
