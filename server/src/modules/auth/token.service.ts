@@ -39,6 +39,15 @@ export interface AccessTokenPayload {
 
   /** 首登必须改密（2026-10-19 新增）：为 1 时只应放行改密接口 */
   mcp?: number;
+
+  /**
+   * 企业内角色（2026-10-27 新增，v2）：0 普通成员 / 1 企业管理员；非企业账号不带此 claim。
+   *
+   * 放 token 里的理由：`/api/enterprise/*` 每个请求都要判"是不是企业管理员"，
+   * 回查 `u_user` 等于白白多一次查询。**任何改变该角色的路径都必须吊销会话**
+   * （移交、降权），否则最长 2 小时内会用到旧权限 —— 这个延迟与 `role` 的既有口径一致。
+   */
+  er?: number;
 }
 
 export interface AccessTokenIssued {
@@ -72,13 +81,19 @@ export class TokenService {
     userId: string,
     username: string,
     role: UserRole,
-    extra?: { userType?: number; enterpriseId?: string | null; mustChangePassword?: number },
+    extra?: {
+      userType?: number;
+      enterpriseId?: string | null;
+      mustChangePassword?: number;
+      enterpriseRole?: number | null;
+    },
   ): Promise<AccessTokenIssued> {
     const expiresIn = this.config.jwt.accessTtlSeconds;
     // 只在有值时才写入可选 claim，避免 JWT 里出现一堆 null 字段
     const claims: AccessTokenPayload = { sub: userId, uname: username, role, ut: extra?.userType ?? 0 };
     if (extra?.enterpriseId) claims.ent = String(extra.enterpriseId);
     if (extra?.mustChangePassword) claims.mcp = 1;
+    if (extra?.enterpriseRole === 0 || extra?.enterpriseRole === 1) claims.er = extra.enterpriseRole;
 
     const accessToken = await this.jwtService.signAsync(
       claims,

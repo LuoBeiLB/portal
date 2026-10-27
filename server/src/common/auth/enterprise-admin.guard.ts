@@ -4,7 +4,6 @@ import { Request } from 'express';
 import { Repository } from 'typeorm';
 
 import { UserRole } from '../../modules/user/entities/user-status.enum';
-import { UserEntity } from '../../modules/user/entities/user.entity';
 import { EnterpriseEntity, EnterpriseRole, EnterpriseStatus } from '../../modules/enterprise/entities/enterprise.entity';
 import { AuthUser } from './current-user.decorator';
 import { BizException, ErrorCode } from '../error/error-code';
@@ -43,8 +42,6 @@ export class EnterpriseAdminGuard implements CanActivate {
   constructor(
     @InjectRepository(EnterpriseEntity)
     private readonly enterprises: Repository<EnterpriseEntity>,
-    @InjectRepository(UserEntity)
-    private readonly users: Repository<UserEntity>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -68,11 +65,13 @@ export class EnterpriseAdminGuard implements CanActivate {
     }
 
     /*
-     * 角色从库里读，不从 token 读：token 里没有 enterprise_role，
-     * 且"被降成普通成员"要立刻生效，不能等 token 过期。
+     * 企业内角色直接读 token 的 er（登录/刷新时写入），**不再回查 u_user** ——
+     * 企业接口调用频繁，每请求多一次查询不划算。
+     *
+     * 代价是角色变更最长 2 小时生效，与既有 ole 的口径一致；所以
+     * **任何改变 enterprise_role 的路径都必须吊销该用户会话**（移交时已吊销旧主管理员）。
      */
-    const entity = await this.users.findOne({ where: { id: user.id } });
-    if (!entity || entity.enterpriseRole !== EnterpriseRole.ADMIN) {
+    if (user.enterpriseRole !== EnterpriseRole.ADMIN) {
       throw new BizException(ErrorCode.OWNER_ONLY);
     }
 

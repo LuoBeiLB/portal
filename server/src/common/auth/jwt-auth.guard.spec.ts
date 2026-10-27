@@ -59,6 +59,7 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
       userType: 0,
       enterpriseId: null,
       mustChangePassword: false,
+      enterpriseRole: null,
     });
   });
 
@@ -74,6 +75,7 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
       userType: 0,
       enterpriseId: null,
       mustChangePassword: false,
+      enterpriseRole: null,
     });
   });
 
@@ -104,6 +106,37 @@ describe('JwtAuthGuard（契约 §0.3 / §0.6）', () => {
 
     await guard.canActivate(ctx);
     expect(request.user).toMatchObject({ userType: 0, enterpriseId: null });
+  });
+
+  it('JWT 带 er=1 → enterpriseRole=1（企业接口判权不用回查库）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () =>
+      Promise.resolve({ sub: 'staff-1', uname: 'liming', role: 'user', ut: 1, ent: '42', er: 1 }),
+    );
+
+    await guard.canActivate(ctx);
+    expect(request.user?.enterpriseRole).toBe(1);
+  });
+
+  it('er=0 → enterpriseRole=0（普通成员，企业接口会拒绝）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () =>
+      Promise.resolve({ sub: 'staff-2', uname: 'wangfang', role: 'user', ut: 1, ent: '42', er: 0 }),
+    );
+
+    await guard.canActivate(ctx);
+    expect(request.user?.enterpriseRole).toBe(0);
+  });
+
+  it('旧 token 没有 er → enterpriseRole=null（fail-closed）', async () => {
+    const request: FakeRequest = { headers: { authorization: 'Bearer abc.def.ghi' } };
+    const { ctx, reflector } = contextOf(request);
+    const guard = guardOf(reflector, () => Promise.resolve({ sub: 'u-1', uname: 'luobo', role: 'user' }));
+
+    await guard.canActivate(ctx);
+    expect(request.user?.enterpriseRole).toBeNull();
   });
 
   it('mcp=1 → mustChangePassword 为 true（首登强制改密）', async () => {

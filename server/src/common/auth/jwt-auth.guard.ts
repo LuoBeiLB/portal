@@ -40,7 +40,16 @@ export class JwtAuthGuard implements CanActivate {
     const token = extractBearerToken(request);
     if (!token) throw new BizException(ErrorCode.UNAUTHENTICATED);
 
-    let payload: { sub: string; uname: string; role?: string; ut?: number; ent?: string; mcp?: number; exp?: number };
+    let payload: {
+      sub: string;
+      uname: string;
+      role?: string;
+      ut?: number;
+      ent?: string;
+      mcp?: number;
+      er?: number;
+      exp?: number;
+    };
     try {
       payload = await this.jwtService.verifyAsync<{
         sub: string;
@@ -49,6 +58,7 @@ export class JwtAuthGuard implements CanActivate {
         ut?: number;
         ent?: string;
         mcp?: number;
+        er?: number;
         exp?: number;
       }>(token, {
         issuer: this.config.jwt.issuer,
@@ -86,6 +96,8 @@ export class JwtAuthGuard implements CanActivate {
       userType,
       enterpriseId,
       mustChangePassword: payload.mcp === 1,
+      // 旧 token 没有 er → null；企业接口那边会判成"不是管理员"，fail-closed
+      enterpriseRole: payload.er === 0 || payload.er === 1 ? payload.er : null,
     };
     return true;
   }

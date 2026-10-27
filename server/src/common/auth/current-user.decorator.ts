@@ -20,6 +20,8 @@ export interface AuthUser {
   enterpriseId: string | null;
   /** 首登必须改密（来自 JWT 的 mcp） */
   mustChangePassword: boolean;
+  /** 企业内角色（来自 JWT 的 er）：0 成员 / 1 管理员；非企业账号为 null */
+  enterpriseRole: number | null;
 }
 
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): AuthUser => {

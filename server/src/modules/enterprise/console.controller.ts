@@ -1,12 +1,9 @@
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Controller, Get, Inject } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Controller, Get } from '@nestjs/common';
 
 import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 import { UserRole } from '../user/entities/user-status.enum';
-import { UserEntity } from '../user/entities/user.entity';
 import { ENTERPRISE_PERMISSIONS, PLATFORM_PERMISSIONS } from './console-permissions';
 import { ConsoleEnterpriseView, ConsoleSessionView } from './dto/console.vo';
 import { EnterpriseRole, EnterpriseStatus } from './entities/enterprise.entity';
@@ -28,10 +25,7 @@ import { EnterpriseService } from './enterprise.service';
 @ApiBearerAuth('bearer')
 @Controller('console')
 export class ConsoleController {
-  constructor(
-    @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
-    private readonly enterprise: EnterpriseService,
-  ) {}
+  constructor(private readonly enterprise: EnterpriseService) {}
 
   @ApiOperation({
     summary: '管理端会话（进管理端的唯一判据）',
@@ -63,8 +57,8 @@ export class ConsoleController {
     if (!user.enterpriseId) {
       throw new BizException(ErrorCode.FORBIDDEN, '该账号不允许进入管理端');
     }
-    const entity = await this.users.findOne({ where: { id: user.id } });
-    if (!entity || entity.enterpriseRole !== EnterpriseRole.ADMIN) {
+    // 角色读 token 的 er（登录/刷新时写入），不额外查库
+    if (user.enterpriseRole !== EnterpriseRole.ADMIN) {
       throw new BizException(ErrorCode.FORBIDDEN, '该账号不允许进入管理端');
     }
 

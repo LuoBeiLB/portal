@@ -164,6 +164,7 @@ export class AuthService {
       userType: user.userType,
       enterpriseId: user.enterpriseId,
       mustChangePassword: user.mustChangePassword,
+      enterpriseRole: user.enterpriseRole,
     });
     return {
       access_token: access.accessToken,
@@ -265,6 +266,7 @@ export class AuthService {
       userType: user.userType,
       enterpriseId: user.enterpriseId,
       mustChangePassword: user.mustChangePassword,
+      enterpriseRole: user.enterpriseRole,
     });
     const refreshToken = await this.tokens.issueRefreshToken(user.id);
     return { access_token: access.accessToken, expires_in: access.expiresIn, refresh_token: refreshToken };
