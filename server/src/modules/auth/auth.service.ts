@@ -235,8 +235,28 @@ export class AuthService {
       throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE, '企业员工账号缺少企业归属');
     }
     const enterprise = await this.enterprises.findOne({ where: { id: String(user.enterpriseId) } });
-    if (!enterprise || enterprise.status !== EnterpriseStatus.ACTIVE) {
-      throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE);
+    if (!enterprise) throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE, '企业不存在');
+
+    /*
+     * 企业四态要给出**可区分**的错误码，前端才能原样展示：
+     *   pending  → 2011「企业注册正在审核中」
+     *   rejected → 2012 并把 reject_reason 拼进 message（企业方要知道为什么被拒）
+     *   其它     → 2007 已停用 / 不存在
+     */
+    switch (enterprise.status) {
+      case EnterpriseStatus.ACTIVE:
+        return;
+      case EnterpriseStatus.PENDING:
+        throw new BizException(ErrorCode.ENTERPRISE_PENDING_REVIEW);
+      case EnterpriseStatus.REJECTED:
+        throw new BizException(
+          ErrorCode.ENTERPRISE_REJECTED,
+          enterprise.rejectReason
+            ? `企业注册未通过：${enterprise.rejectReason}`
+            : '企业注册未通过',
+        );
+      default:
+        throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE, '企业已停用，请联系平台');
     }
   }
 

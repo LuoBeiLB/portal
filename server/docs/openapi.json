@@ -791,7 +791,7 @@
     "/api/admin/enterprises": {
       "get": {
         "operationId": "EnterpriseAdminController_list",
-        "summary": "企业列表",
+        "summary": "企业列表（含审核页所需字段）",
         "description": "支持按状态与关键词（编码/名称）筛选。`owner_user_id` 为 null 表示还在 pending（未指定所有者，不可用）。",
         "parameters": [
           {
@@ -807,12 +807,13 @@
             "name": "status",
             "required": false,
             "in": "query",
-            "description": "状态筛选",
+            "description": "状态筛选。审核页用 `pending`",
             "schema": {
-              "example": "active",
+              "example": "pending",
               "enum": [
                 "pending",
                 "active",
+                "rejected",
                 "disabled"
               ],
               "type": "string"
@@ -900,10 +901,141 @@
         ]
       }
     },
+    "/api/admin/enterprises/{id}/approve": {
+      "post": {
+        "operationId": "EnterpriseAdminController_approve",
+        "summary": "审核通过企业注册",
+        "description": "把 pending（或已被驳回的 rejected）企业置为 active，写 reviewed_at / reviewed_by。\n\n通过后该企业全部成员会话被吊销 —— 让他们重登拿一张\"企业已可用\"的新 token。\n\n错误：2007 企业不存在 ｜ 1001 当前状态不允许审核（只有 pending / rejected 可审）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "审核结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseReviewView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/enterprises/{id}/reject": {
+      "post": {
+        "operationId": "EnterpriseAdminController_reject",
+        "summary": "驳回企业注册（原因必填）",
+        "description": "pending → rejected，并把原因写进 reject_reason。\n\n原因必填：企业方登录时会收到 2012，message 里原样回显这条原因 —— 否则他不知道该补什么。\n\n平台可以在同一条记录上重新通过，但不做企业自助重提（避免绕过审核）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectEnterpriseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "驳回结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseReviewView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/enterprises/{id}/status": {
+      "post": {
+        "operationId": "EnterpriseAdminController_setStatus",
+        "summary": "停用 / 恢复企业（运营动作）",
+        "description": "客户不能自助停用。停用后该企业全部成员会话被吊销、登录返回 2007。\n\npending 企业不允许直接激活 —— 请走审核通过（那些资料还没人看过）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterpriseStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "变更结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseReviewView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin · 企业"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/admin/enterprises/{id}/owner": {
       "post": {
         "operationId": "EnterpriseAdminController_assignOwner",
-        "summary": "指定 / 移交企业所有者（流程②）",
+        "summary": "指定 / 移交企业主管理员（运营介入时用，正常走注册）",
         "description": "把某账号设为该企业所有者：**唯一管理员 + 资源默认持有人**。\n\n首次指定会把企业从 `pending` 置为 `active`；**移交**（企业原来已有所有者）会吊销旧所有者全部会话，让他重新登录以拿到正确的身份。\n\n四条校验：不能是平台管理员 / 不能已属于其他企业 / 不能被禁用 / 已有所有者时按移交处理。",
         "parameters": [
           {
@@ -1046,7 +1178,7 @@
           }
         },
         "tags": [
-          "企业端 enterprise（所有者）"
+          "企业端 enterprise（企业管理员）"
         ],
         "security": [
           {
@@ -1082,7 +1214,7 @@
           }
         },
         "tags": [
-          "企业端 enterprise（所有者）"
+          "企业端 enterprise（企业管理员）"
         ],
         "security": [
           {
@@ -1119,7 +1251,7 @@
           }
         },
         "tags": [
-          "企业端 enterprise（所有者）"
+          "企业端 enterprise（企业管理员）"
         ],
         "security": [
           {
@@ -1166,7 +1298,68 @@
           }
         },
         "tags": [
-          "企业端 enterprise（所有者）"
+          "企业端 enterprise（企业管理员）"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/enterprise/register": {
+      "post": {
+        "operationId": "EnterpriseRegisterController_register",
+        "summary": "企业自助注册（免登录）",
+        "description": "一次提交同时建出：企业（`pending`）+ 企业管理员账号（`enterprise_role=1`）+ 钱包。\n\n**注册不等于可用** —— 必须等平台审核通过（`/api/admin/enterprises/{id}/approve`）。\n审核前该账号登录会返回 `2011`。\n\n错误：`2013` 企业编码已存在 ｜ `2014` 管理员账号已被占用（与 C 端个人用户共用命名空间）｜ `1001` 参数校验。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterEnterpriseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "注册结果（固定 pending）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseRegisteredView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "企业注册 enterprise"
+        ]
+      }
+    },
+    "/api/console/session": {
+      "get": {
+        "operationId": "ConsoleController_session",
+        "summary": "管理端会话（进管理端的唯一判据）",
+        "description": "返回 `scope`（`platform` / `enterprise`）与 `permissions[]` 白名单。\n\n平台管理员：全量 `platform.*`，`enterprise` 为 `null`。\n企业管理员：四个 `enterprise.*`，并带企业摘要（成员数、是否主管理员）。\n个人用户 / 企业普通成员：`1004` —— 不允许进管理端。\n\n企业非 `active`：`2011` 待审核 / `2012` 已驳回（message 带原因）/ `2007` 已停用。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "会话信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleSessionView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 console"
         ],
         "security": [
           {
@@ -3068,31 +3261,45 @@
           "code": {
             "type": "string",
             "description": "企业编码",
-            "example": "acme"
+            "example": "acme2026"
           },
           "name": {
             "type": "string",
             "description": "企业名称",
-            "example": "云存储公司"
+            "example": "某某科技有限公司"
           },
           "status": {
             "type": "string",
-            "description": "状态：`pending` 待指定所有者（不可用）· `active` 正常 · `disabled` 已停用",
+            "description": "状态：`pending` 待审核 · `active` 正常 · `rejected` 已驳回 · `disabled` 已停用",
             "enum": [
               "pending",
               "active",
+              "rejected",
               "disabled"
             ],
             "example": "active"
           },
-          "quota_bytes": {
+          "contact_name": {
             "type": "string",
-            "description": "企业总配额（字节，0 = 不限）",
-            "example": "1099511627776"
+            "description": "注册联系人",
+            "nullable": true,
+            "example": "张三"
+          },
+          "contact_phone": {
+            "type": "string",
+            "description": "注册联系电话",
+            "nullable": true,
+            "example": "13800000000"
+          },
+          "remark": {
+            "type": "string",
+            "description": "注册备注（企业方填写）",
+            "nullable": true,
+            "example": "因业务拓展申请开通"
           },
           "owner_user_id": {
             "type": "string",
-            "description": "企业所有者 `u_user.id`；`null` 表示还没有所有者（企业不可用）",
+            "description": "主管理员 `u_user.id`（创建者 / 资源持有人 / 付费方）；`null` 表示尚未回填",
             "nullable": true,
             "example": "01a123fc-c68a-762c-ac55-de911541ab67"
           },
@@ -3101,10 +3308,35 @@
             "description": "服务到期时间（UTC ISO 8601）；无到期时间为 null",
             "nullable": true
           },
+          "reviewed_at": {
+            "type": "string",
+            "description": "审核时间；未审核为 null",
+            "nullable": true
+          },
+          "reviewed_by": {
+            "type": "string",
+            "description": "审核人 `u_user.id`；未审核为 null",
+            "nullable": true
+          },
+          "reviewed_by_username": {
+            "type": "string",
+            "description": "审核人用户名（列表直接展示，省得前端再查）",
+            "nullable": true
+          },
+          "reject_reason": {
+            "type": "string",
+            "description": "驳回原因；仅 `rejected` 状态有值",
+            "nullable": true
+          },
+          "member_count": {
+            "type": "number",
+            "description": "企业成员数（含主管理员）",
+            "example": 12
+          },
           "created_at": {
             "type": "string",
             "description": "创建时间（UTC ISO 8601）",
-            "example": "2026-10-19T02:00:00Z"
+            "example": "2026-10-27T02:00:00Z"
           }
         },
         "required": [
@@ -3112,9 +3344,16 @@
           "code",
           "name",
           "status",
-          "quota_bytes",
+          "contact_name",
+          "contact_phone",
+          "remark",
           "owner_user_id",
           "expire_at",
+          "reviewed_at",
+          "reviewed_by",
+          "reviewed_by_username",
+          "reject_reason",
+          "member_count",
           "created_at"
         ]
       },
@@ -3156,7 +3395,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "企业编码，对接用；建好后不可改",
+            "description": "企业编码，唯一、建好后不可改",
             "example": "acme",
             "maxLength": 64
           },
@@ -3166,10 +3405,20 @@
             "example": "云存储公司",
             "maxLength": 128
           },
-          "quota_bytes": {
-            "type": "number",
-            "description": "企业总配额（字节，0 = 不限），默认 0",
-            "example": 1099511627776
+          "contact_name": {
+            "type": "string",
+            "description": "注册联系人",
+            "example": "张三"
+          },
+          "contact_phone": {
+            "type": "string",
+            "description": "注册联系电话",
+            "example": "13800000000"
+          },
+          "remark": {
+            "type": "string",
+            "description": "备注",
+            "example": "大客户，平台代开"
           },
           "expire_at": {
             "type": "string",
@@ -3182,12 +3431,74 @@
           "name"
         ]
       },
+      "EnterpriseReviewView": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "固定 `true`",
+            "example": true
+          },
+          "enterprise_id": {
+            "type": "string",
+            "description": "企业 id",
+            "example": "1"
+          },
+          "status": {
+            "type": "string",
+            "description": "变更后的状态",
+            "enum": [
+              "pending",
+              "active",
+              "rejected",
+              "disabled"
+            ],
+            "example": "active"
+          }
+        },
+        "required": [
+          "ok",
+          "enterprise_id",
+          "status"
+        ]
+      },
+      "RejectEnterpriseDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "驳回原因。必填，最长 255 字，会原样出现在企业方登录失败的 message 里",
+            "example": "资料不全，请补充营业执照",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "EnterpriseStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "目标状态：`active` 恢复 · `disabled` 停用（`pending` 请走审核接口）",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "example": "disabled"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "AssignOwnerDto": {
         "type": "object",
         "properties": {
           "user_id": {
             "type": "string",
-            "description": "目标账号的 `u_user.id`（UUID36）。必须是本企业员工或可转为员工的个人账号；不能是平台管理员",
+            "description": "目标账号 `u_user.id`（UUID36）。必须是本企业成员或可转为成员的账号；不能是平台管理员",
             "example": "01a123fc-c68a-762c-ac55-de911541ab67"
           }
         },
@@ -3210,26 +3521,27 @@
           },
           "status": {
             "type": "string",
-            "description": "变更后的状态：正常情况下为 `active`",
+            "description": "变更后的状态",
             "enum": [
               "pending",
               "active",
+              "rejected",
               "disabled"
             ]
           },
           "owner_user_id": {
             "type": "string",
-            "description": "新的所有者 `u_user.id`",
+            "description": "新的主管理员 `u_user.id`",
             "example": "01a123fc-c68a-762c-ac55-de911541ab67"
           },
           "transferred": {
             "type": "boolean",
-            "description": "是否为「移交」（企业原来已有所有者）。`false` 表示首次指定",
+            "description": "是否为「移交」（企业原来已有主管理员）",
             "example": false
           },
           "revoked_sessions": {
             "type": "number",
-            "description": "本次被吊销的会话数（**换所有者后旧所有者必须重登**）",
+            "description": "本次被吊销的会话数（换人后旧管理员必须重登）",
             "example": 1
           }
         },
@@ -3285,18 +3597,23 @@
           },
           "is_owner": {
             "type": "boolean",
-            "description": "是否为该企业所有者",
+            "description": "是否为主管理员（`owner_user_id` 指向他；资源持有人/付费方）",
+            "example": false
+          },
+          "is_admin": {
+            "type": "boolean",
+            "description": "是否为企业管理员（`enterprise_role = 1`）。**判权看这个**，不看 `is_owner`",
             "example": false
           },
           "must_change_password": {
             "type": "boolean",
-            "description": "是否首次登录必须改密（企业管理员建的号初始为 `true`）",
+            "description": "是否首次登录必须改密",
             "example": true
           },
           "created_at": {
             "type": "string",
             "description": "创建时间（UTC ISO 8601）",
-            "example": "2026-10-19T02:00:00Z"
+            "example": "2026-10-27T02:00:00Z"
           }
         },
         "required": [
@@ -3305,6 +3622,7 @@
           "phone",
           "status",
           "is_owner",
+          "is_admin",
           "must_change_password",
           "created_at"
         ]
@@ -3347,9 +3665,9 @@
         "properties": {
           "username": {
             "type": "string",
-            "description": "登录账号（企业内唯一；全库唯一约束仍在，见契约 §1.1）",
+            "description": "登录账号（全库唯一，与 C 端共用命名空间）",
             "example": "liming",
-            "maxLength": 64
+            "maxLength": 32
           },
           "phone": {
             "type": "string",
@@ -3418,7 +3736,7 @@
           },
           "revoked_sessions": {
             "type": "number",
-            "description": "本次被吊销的会话数（该员工所有设备强制重登）",
+            "description": "本次被吊销的会话数",
             "example": 2
           }
         },
@@ -3465,12 +3783,12 @@
           },
           "revoked_sessions": {
             "type": "number",
-            "description": "本次被吊销的会话数（禁用会强制下线；启用不恢复登录态）",
+            "description": "本次被吊销的会话数",
             "example": 2
           },
           "is_owner": {
             "type": "boolean",
-            "description": "目标是否为企业所有者。所有者**不允许被停用**（服务端会拒绝），所以正常返回时为 `false`",
+            "description": "目标是否为主管理员。主管理员**不允许被停用**（服务端会拒绝），故正常响应里为 `false`",
             "example": false
           }
         },
@@ -3479,6 +3797,206 @@
           "status",
           "revoked_sessions",
           "is_owner"
+        ]
+      },
+      "RegisterEnterpriseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "企业编码，唯一、建好后不可改",
+            "example": "acme2026",
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "description": "企业名称",
+            "example": "某某科技有限公司",
+            "maxLength": 128
+          },
+          "contact_name": {
+            "type": "string",
+            "description": "注册联系人",
+            "example": "张三",
+            "maxLength": 64
+          },
+          "contact_phone": {
+            "type": "string",
+            "description": "注册联系电话（也会作为管理员账号的手机号）",
+            "example": "13800000000"
+          },
+          "remark": {
+            "type": "string",
+            "description": "注册备注（企业方填写，供审核参考）",
+            "example": "因业务拓展申请开通",
+            "maxLength": 255
+          },
+          "admin_username": {
+            "type": "string",
+            "description": "企业管理员登录账号。与 C 端个人用户**共用命名空间**，全库唯一",
+            "example": "acme_admin",
+            "maxLength": 32
+          },
+          "admin_password": {
+            "type": "string",
+            "description": "企业管理员密码，8-64 位且至少含字母和数字",
+            "example": "Abc123456",
+            "maxLength": 64,
+            "minLength": 8
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "admin_username",
+          "admin_password"
+        ]
+      },
+      "EnterpriseRegisteredView": {
+        "type": "object",
+        "properties": {
+          "enterprise_id": {
+            "type": "string",
+            "description": "新建企业 id",
+            "example": "1"
+          },
+          "status": {
+            "type": "string",
+            "description": "固定为 `pending` —— **注册不等于可用**，要等平台审核",
+            "enum": [
+              "pending"
+            ],
+            "example": "pending"
+          },
+          "admin_username": {
+            "type": "string",
+            "description": "同时建出的企业管理员账号",
+            "example": "acme_admin"
+          },
+          "message": {
+            "type": "string",
+            "description": "给 C 端直接展示的提示语",
+            "example": "注册已提交，等待平台审核"
+          }
+        },
+        "required": [
+          "enterprise_id",
+          "status",
+          "admin_username",
+          "message"
+        ]
+      },
+      "ConsoleEnterpriseView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "企业 id",
+            "example": "1"
+          },
+          "code": {
+            "type": "string",
+            "description": "企业编码",
+            "example": "acme2026"
+          },
+          "name": {
+            "type": "string",
+            "description": "企业名称",
+            "example": "某某科技有限公司"
+          },
+          "status": {
+            "type": "string",
+            "description": "企业状态；能进企业视图时必为 `active`",
+            "enum": [
+              "pending",
+              "active",
+              "rejected",
+              "disabled"
+            ]
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "服务到期时间（UTC ISO 8601），可空",
+            "nullable": true
+          },
+          "member_count": {
+            "type": "number",
+            "description": "企业成员数（含主管理员）",
+            "example": 12
+          },
+          "is_owner": {
+            "type": "boolean",
+            "description": "当前账号是否为主管理员（资源持有人/付费方）",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "status",
+          "expire_at",
+          "member_count",
+          "is_owner"
+        ]
+      },
+      "ConsoleSessionView": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": "string",
+            "description": "当前操作人用户名",
+            "example": "acme_admin"
+          },
+          "operator_id": {
+            "type": "string",
+            "description": "当前操作人 `u_user.id`",
+            "example": "01a123fc-c68a-762c-ac55-de911541ab67"
+          },
+          "scope": {
+            "type": "string",
+            "description": "视图范围：`platform` 全平台 · `enterprise` 仅本企业",
+            "enum": [
+              "platform",
+              "enterprise"
+            ],
+            "example": "enterprise"
+          },
+          "permissions": {
+            "description": "权限点白名单。前端据此过滤菜单 / 路由 / 按钮，**没列出来的一律不可见**",
+            "example": [
+              "enterprise.profile.read",
+              "enterprise.member.read",
+              "enterprise.member.write",
+              "enterprise.member.reset"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enterprise": {
+            "description": "平台管理员为 `null`；企业管理员为企业摘要",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConsoleEnterpriseView"
+              }
+            ]
+          },
+          "server_time": {
+            "type": "string",
+            "description": "服务端当前时间（UTC ISO 8601），前端可据此校准",
+            "example": "2026-10-27T03:10:30Z"
+          }
+        },
+        "required": [
+          "operator",
+          "operator_id",
+          "scope",
+          "permissions",
+          "enterprise",
+          "server_time"
         ]
       },
       "BalanceView": {

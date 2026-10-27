@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { EnterpriseOwnerGuard } from '../../common/auth/enterprise-owner.guard';
+import { EnterpriseAdminGuard } from '../../common/auth/enterprise-admin.guard';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { PasswordService } from '../auth/password.service';
@@ -9,6 +9,8 @@ import { TokenService } from '../auth/token.service';
 import { UserEntity } from '../user/entities/user.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { EnterpriseAdminController, EnterpriseUserAdminController } from './enterprise-admin.controller';
+import { ConsoleController } from './console.controller';
+import { EnterpriseRegisterController } from './enterprise-register.controller';
 import { EnterpriseOwnerController } from './enterprise.controller';
 import { EnterpriseService } from './enterprise.service';
 import { EnterpriseEntity } from './entities/enterprise.entity';
@@ -29,8 +31,14 @@ import { EnterpriseEntity } from './entities/enterprise.entity';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([EnterpriseEntity, UserEntity, WalletEntity]), AuthModule, AuditModule],
-  controllers: [EnterpriseAdminController, EnterpriseUserAdminController, EnterpriseOwnerController],
-  providers: [EnterpriseService, EnterpriseOwnerGuard],
+  controllers: [
+    EnterpriseAdminController,
+    EnterpriseUserAdminController,
+    EnterpriseOwnerController,
+    EnterpriseRegisterController,
+    ConsoleController,
+  ],
+  providers: [EnterpriseService, EnterpriseAdminGuard],
   exports: [EnterpriseService],
 })
 export class EnterpriseModule {}

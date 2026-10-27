@@ -38,7 +38,13 @@ export enum AuditAction {
   ENTERPRISE_OWNER_ASSIGN = 'enterprise_owner_assign',
   /** 管理端把已有账号分配 / 调整企业 */
   ENTERPRISE_USER_ASSIGN = 'enterprise_user_assign',
-  /** 企业所有者建本企业员工（流程③） */
+  /** 审核通过企业注册 */
+  ENTERPRISE_APPROVE = 'enterprise_approve',
+  /** 驳回企业注册（含原因） */
+  ENTERPRISE_REJECT = 'enterprise_reject',
+  /** 停用 / 恢复企业 */
+  ENTERPRISE_STATUS_CHANGE = 'enterprise_status_change',
+  /** 企业管理员建本企业员工（流程③） */
   ENTERPRISE_USER_CREATE = 'enterprise_user_create',
   /** 企业内重置员工密码 */
   ENTERPRISE_USER_PASSWORD_RESET = 'enterprise_user_password_reset',

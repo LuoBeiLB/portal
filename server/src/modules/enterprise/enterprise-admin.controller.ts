@@ -11,9 +11,12 @@ import {
   AssignUserEnterpriseDto,
   CreateEnterpriseDto,
   EnterpriseQueryDto,
+  EnterpriseStatusDto,
+  RejectEnterpriseDto,
 } from './dto/enterprise.dto';
 import {
   EnterpriseListView,
+  EnterpriseReviewView,
   EnterpriseUserView,
   EnterpriseView,
   OwnerAssignedView,
@@ -40,7 +43,7 @@ export class EnterpriseAdminController {
   ) {}
 
   @ApiOperation({
-    summary: '企业列表',
+    summary: '企业列表（含审核页所需字段）',
     description: '支持按状态与关键词（编码/名称）筛选。`owner_user_id` 为 null 表示还在 pending（未指定所有者，不可用）。',
   })
   @ApiOkResponse({ description: '企业列表', type: EnterpriseListView })
@@ -77,7 +80,89 @@ export class EnterpriseAdminController {
   }
 
   @ApiOperation({
-    summary: '指定 / 移交企业所有者（流程②）',
+    summary: '审核通过企业注册',
+    description:
+      '把 pending（或已被驳回的 rejected）企业置为 active，写 reviewed_at / reviewed_by。\n\n' +
+      '通过后该企业全部成员会话被吊销 —— 让他们重登拿一张"企业已可用"的新 token。\n\n' +
+      '错误：2007 企业不存在 ｜ 1001 当前状态不允许审核（只有 pending / rejected 可审）。',
+  })
+  @ApiOkResponse({ description: '审核结果', type: EnterpriseReviewView })
+  @Post(':id/approve')
+  @HttpCode(200)
+  async approve(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() request: Request,
+  ): Promise<EnterpriseReviewView> {
+    const result = await this.enterprise.approve(id, user.id);
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.ENTERPRISE_APPROVE,
+      target: `enterprise:${id}`,
+      detail: { status: result.status },
+      ip: this.audit.ipOf(request),
+    });
+    return result;
+  }
+
+  @ApiOperation({
+    summary: '驳回企业注册（原因必填）',
+    description:
+      'pending → rejected，并把原因写进 reject_reason。\n\n' +
+      '原因必填：企业方登录时会收到 2012，message 里原样回显这条原因 —— 否则他不知道该补什么。\n\n' +
+      '平台可以在同一条记录上重新通过，但不做企业自助重提（避免绕过审核）。',
+  })
+  @ApiOkResponse({ description: '驳回结果', type: EnterpriseReviewView })
+  @Post(':id/reject')
+  @HttpCode(200)
+  async reject(
+    @Param('id') id: string,
+    @Body() dto: RejectEnterpriseDto,
+    @CurrentUser() user: AuthUser,
+    @Req() request: Request,
+  ): Promise<EnterpriseReviewView> {
+    const result = await this.enterprise.reject(id, user.id, dto.reason);
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.ENTERPRISE_REJECT,
+      target: `enterprise:${id}`,
+      detail: { reason: dto.reason },
+      ip: this.audit.ipOf(request),
+    });
+    return result;
+  }
+
+  @ApiOperation({
+    summary: '停用 / 恢复企业（运营动作）',
+    description:
+      '客户不能自助停用。停用后该企业全部成员会话被吊销、登录返回 2007。\n\n' +
+      'pending 企业不允许直接激活 —— 请走审核通过（那些资料还没人看过）。',
+  })
+  @ApiOkResponse({ description: '变更结果', type: EnterpriseReviewView })
+  @Post(':id/status')
+  @HttpCode(200)
+  async setStatus(
+    @Param('id') id: string,
+    @Body() dto: EnterpriseStatusDto,
+    @CurrentUser() user: AuthUser,
+    @Req() request: Request,
+  ): Promise<EnterpriseReviewView> {
+    const result = await this.enterprise.setStatus(id, dto.status);
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.ENTERPRISE_STATUS_CHANGE,
+      target: `enterprise:${id}`,
+      detail: { status: dto.status },
+      ip: this.audit.ipOf(request),
+    });
+    return result;
+  }
+
+  @ApiOperation({
+    summary: '指定 / 移交企业主管理员（运营介入时用，正常走注册）',
     description:
       '把某账号设为该企业所有者：**唯一管理员 + 资源默认持有人**。\n\n' +
       '首次指定会把企业从 `pending` 置为 `active`；**移交**（企业原来已有所有者）会吊销旧所有者全部会话，' +

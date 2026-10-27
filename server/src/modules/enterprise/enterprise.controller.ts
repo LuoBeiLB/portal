@@ -3,7 +3,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } f
 import { Request } from 'express';
 
 import { CurrentEnterprise } from '../../common/auth/current-enterprise.decorator';
-import { EnterpriseOwnerGuard } from '../../common/auth/enterprise-owner.guard';
+import { EnterpriseAdminGuard } from '../../common/auth/enterprise-admin.guard';
 import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { AuditService } from '../audit/audit.service';
@@ -36,9 +36,9 @@ import { EnterpriseService } from './enterprise.service';
  * 企业所有者就能把员工建到别家企业去。所以下面的 DTO **刻意没有这个字段**，
  * 并且企业 id 一律来自 `@CurrentEnterprise()`（由守卫从登录态查出来）。
  */
-@ApiTags('企业端 enterprise（所有者）')
+@ApiTags('企业端 enterprise（企业管理员）')
 @ApiBearerAuth('bearer')
-@UseGuards(EnterpriseOwnerGuard)
+@UseGuards(EnterpriseAdminGuard)
 @Controller('enterprise')
 export class EnterpriseOwnerController {
   constructor(

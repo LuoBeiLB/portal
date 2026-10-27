@@ -24,8 +24,16 @@ export enum ErrorCode {
   USER_ALREADY_IN_ENTERPRISE = 2008,
   /** 该企业已有所有者；换人必须走「移交」而不是再指定一个 */
   ENTERPRISE_OWNER_EXISTS = 2009,
-  /** 该接口仅企业所有者可调用 */
+  /** 该接口仅企业管理员可调用（enterprise_role = 1） */
   OWNER_ONLY = 2010,
+  /** 企业注册**待审核**：登录时返回，前端可直接展示 */
+  ENTERPRISE_PENDING_REVIEW = 2011,
+  /** 企业注册**已驳回**：message 里带 eject_reason */
+  ENTERPRISE_REJECTED = 2012,
+  /** 企业编码已存在（注册时） */
+  ENTERPRISE_CODE_EXISTS = 2013,
+  /** 企业管理员账号已被占用（注册时；与 C 端个人用户共用命名空间） */
+  ENTERPRISE_ADMIN_USERNAME_TAKEN = 2014,
 
   // 钱包
   INSUFFICIENT_BALANCE = 3001,
@@ -58,7 +66,11 @@ export const ERROR_MESSAGES: Record<number, string> = {
   [ErrorCode.ENTERPRISE_UNAVAILABLE]: '企业不存在或已停用',
   [ErrorCode.USER_ALREADY_IN_ENTERPRISE]: '账号已属于其他企业',
   [ErrorCode.ENTERPRISE_OWNER_EXISTS]: '企业已有所有者，请走移交',
-  [ErrorCode.OWNER_ONLY]: '该操作仅企业所有者可执行',
+  [ErrorCode.OWNER_ONLY]: '该操作仅企业管理员可执行',
+  [ErrorCode.ENTERPRISE_PENDING_REVIEW]: '企业注册正在审核中，请等待平台通过',
+  [ErrorCode.ENTERPRISE_REJECTED]: '企业注册未通过',
+  [ErrorCode.ENTERPRISE_CODE_EXISTS]: '企业编码已存在',
+  [ErrorCode.ENTERPRISE_ADMIN_USERNAME_TAKEN]: '企业管理员账号已被占用',
   [ErrorCode.INSUFFICIENT_BALANCE]: '余额不足',
   [ErrorCode.WALLET_FROZEN]: '钱包冻结',
   [ErrorCode.IDEMPOTENT_REPEATED]: '幂等重复（非错误）',

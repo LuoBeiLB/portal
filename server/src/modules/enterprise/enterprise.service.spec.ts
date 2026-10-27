@@ -97,12 +97,12 @@ async function expectBizCode(run: () => Promise<unknown>, code: ErrorCode): Prom
 /* ────────────────── 建企业 ────────────────── */
 
 describe('EnterpriseService.createEnterprise（流程①）', () => {
-  it('编码重复 → 1001', async () => {
+  it('编码重复 → 2013（专用码，前端可精确提示）', async () => {
     const h = harness();
     h.enterprises.findOne.mockResolvedValue(enterpriseOf({ code: 'acme' }));
     await expectBizCode(
       () => h.service.createEnterprise({ code: 'acme', name: 'X' }, 'admin-1'),
-      ErrorCode.PARAM_INVALID,
+      ErrorCode.ENTERPRISE_CODE_EXISTS,
     );
   });
 
@@ -172,7 +172,11 @@ describe('EnterpriseService.assignOwner（流程②的四条资格校验）', ()
     // 1) 提升账号 2) 回填 owner + 置 active
     expect(h.manager.update).toHaveBeenCalledTimes(2);
     const userPatch = h.manager.update.mock.calls[0]?.[2] as Record<string, unknown>;
-    expect(userPatch).toEqual({ userType: UserType.ENTERPRISE_STAFF, enterpriseId: '1' });
+    expect(userPatch).toEqual({
+      userType: UserType.ENTERPRISE_STAFF,
+      enterpriseId: '1',
+      enterpriseRole: 1,
+    });
     const entPatch = h.manager.update.mock.calls[1]?.[2] as Record<string, unknown>;
     expect(entPatch.ownerUserId).toBe('u-1');
     expect(entPatch.status).toBe(EnterpriseStatus.ACTIVE);
