@@ -83,6 +83,17 @@ export class LoginUserView {
     example: null,
   })
   enterprise_id!: string | null;
+
+  @ApiProperty({
+    description:
+      '企业内角色：`0` 普通成员 · `1` 企业管理员 · `null` 非企业账号（等价于 JWT 的 `er`）。' +
+      '前端可据此决定是否显示管理端入口；**真正的权限点仍以 `GET /api/console/session` 的 `permissions` 为准**',
+    type: Number,
+    nullable: true,
+    enum: [0, 1],
+    example: null,
+  })
+  enterprise_role!: number | null;
 }
 
 /** 注册成功（契约 §1.1）：档案字段在顶层 + 令牌 + 用户摘要 */

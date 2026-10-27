@@ -2525,6 +2525,16 @@
             "description": "所属企业 id；个人用户为 `null`。产品侧建租户上下文的依据（也等价于 JWT 的 `ent`）",
             "nullable": true,
             "example": null
+          },
+          "enterprise_role": {
+            "type": "number",
+            "description": "企业内角色：`0` 普通成员 · `1` 企业管理员 · `null` 非企业账号（等价于 JWT 的 `er`）。前端可据此决定是否显示管理端入口；**真正的权限点仍以 `GET /api/console/session` 的 `permissions` 为准**",
+            "nullable": true,
+            "enum": [
+              0,
+              1
+            ],
+            "example": null
           }
         },
         "required": [
@@ -2533,7 +2543,8 @@
           "role",
           "status",
           "user_type",
-          "enterprise_id"
+          "enterprise_id",
+          "enterprise_role"
         ]
       },
       "RegisterResultView": {
