@@ -2535,6 +2535,11 @@
               1
             ],
             "example": null
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "首登是否必须改密（等价于 JWT 的 `mcp`）。企业管理员建的员工账号初始为 `true`。\n\n⚠️ 后端目前**只标记不拦截**：拿到 `true` 时前端应主动跳改密页，否则他能直接用业务功能。",
+            "example": false
           }
         },
         "required": [
@@ -2544,7 +2549,8 @@
           "status",
           "user_type",
           "enterprise_id",
-          "enterprise_role"
+          "enterprise_role",
+          "must_change_password"
         ]
       },
       "RegisterResultView": {

@@ -94,6 +94,14 @@ export class LoginUserView {
     example: null,
   })
   enterprise_role!: number | null;
+
+  @ApiProperty({
+    description:
+      '首登是否必须改密（等价于 JWT 的 `mcp`）。企业管理员建的员工账号初始为 `true`。\n\n' +
+      '⚠️ 后端目前**只标记不拦截**：拿到 `true` 时前端应主动跳改密页，否则他能直接用业务功能。',
+    example: false,
+  })
+  must_change_password!: boolean;
 }
 
 /** 注册成功（契约 §1.1）：档案字段在顶层 + 令牌 + 用户摘要 */
