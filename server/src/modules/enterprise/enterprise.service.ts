@@ -29,6 +29,7 @@ import {
   OwnerAssignedView,
 } from './dto/enterprise.vo';
 import { EnterpriseEntity, EnterpriseRole, EnterpriseStatus } from './entities/enterprise.entity';
+import { queryEnterpriseMembers } from './enterprise-member.query';
 
 /** 初始密码字符集：去掉 0/O/1/l/I 这类易混字符，方便口头或短信转达 */
 const PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -353,17 +354,16 @@ export class EnterpriseService {
     const size = query.size ?? 20;
     const enterprise = await this.enterprises.findOne({ where: { id: enterpriseId } });
 
-    const qb = this.users.createQueryBuilder('u');
-    qb.where('u.enterprise_id = :eid', { eid: enterpriseId });
-    if (query.keyword) {
-      qb.andWhere('(u.username LIKE :kw OR u.phone LIKE :kw)', { kw: `%${query.keyword.trim()}%` });
-    }
-    qb.orderBy('u.created_at', 'DESC')
-      .addOrderBy('u.id', 'DESC')
-      .skip((page - 1) * size)
-      .take(size);
+    /*
+     * 与产品侧的内网接口用**同一条查询**（见 enterprise-member.query.ts）：
+     * 保证两边的成员集合与顺序一致，差异只留在出参映射上。
+     */
+    const { rows, total } = await queryEnterpriseMembers(this.users, enterpriseId, {
+      keyword: query.keyword,
+      limit: size,
+      offset: (page - 1) * size,
+    });
 
-    const [rows, total] = await qb.getManyAndCount();
     return { total, page, size, list: rows.map((u) => this.toUserView(u, enterprise ?? null)) };
   }
 

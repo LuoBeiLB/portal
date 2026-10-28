@@ -41,4 +41,19 @@ export class InternalEnterpriseAccountQueryDto {
   @Min(1)
   @Max(200)
   limit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      '跳过多少条，配合 `limit` 做分页（默认 0）。' +
+      '当 `offset + returned < total` 时还有下一页；成员按 `created_at ASC` 排序，' +
+      '翻页期间有人加入可能边界重复，按 `portal_user_id` 去重即可',
+    example: 0,
+    default: 0,
+    minimum: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }

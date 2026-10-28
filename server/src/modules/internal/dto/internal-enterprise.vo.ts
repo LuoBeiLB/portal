@@ -39,6 +39,24 @@ export class InternalEnterpriseAccountView {
     example: 0,
   })
   status!: number;
+
+  @ApiProperty({
+    description:
+      '企业内角色：`0` 普通成员 · `1` 企业管理员。' +
+      '产品侧做成员列表时用它标出"谁是管理员"。' +
+      '⚠️ 它只代表**门户里**的企业管理员身份，不等于你产品内的管理员',
+    enum: [0, 1],
+    example: 0,
+  })
+  enterprise_role!: number;
+
+  @ApiProperty({
+    description:
+      '是否为主管理员（创建者 / **资源持有人 / 付费方**），一个企业只有一个。' +
+      '要判断"谁能充值/付费"看这个，不要看 `enterprise_role`',
+    example: false,
+  })
+  is_owner!: boolean;
 }
 
 /** 账号池响应 data */
@@ -51,6 +69,9 @@ export class InternalEnterpriseAccountListView {
 
   @ApiProperty({ description: '本次返回条数（≤ limit）', example: 12 })
   returned!: number;
+
+  @ApiProperty({ description: '本次跳过的条数（回显请求的 `offset`）', example: 0 })
+  offset!: number;
 
   @ApiProperty({ description: '候选账号列表', type: [InternalEnterpriseAccountView] })
   list!: InternalEnterpriseAccountView[];

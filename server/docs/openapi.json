@@ -1940,8 +1940,8 @@
     "/api/internal/enterprise-accounts": {
       "get": {
         "operationId": "InternalEnterpriseAccountController_list",
-        "summary": "拉取某企业的账号池（产品侧\"加入成员\"用）",
-        "description": "产品 → 门户。返回该企业的候选账号，供产品侧\"把门户账号加入本企业\"时挑人。\n\n**只返回 `enterprise_id` 指定的那一家企业**；企业不是 `active` 时返回 `2007`。\n\n`keyword` 同时匹配登录账号与手机号；`limit` 默认 50、上限 200。\n\n错误：`1004` 密钥无效 / 密钥与自报 `product_code` 不一致、`2007` 企业不存在或未激活、`1001` 参数错误。",
+        "summary": "拉取某企业的成员（产品侧企业权限管理的数据源）",
+        "description": "产品 → 门户。返回该企业的成员，供产品侧把门户账号挂进自己的企业权限体系。\n\n**只返回 `enterprise_id` 指定的那一家企业**；企业不是 `active` 时返回 `2007`。\n\n`keyword` 同时匹配登录账号与手机号；`limit` 默认 50、上限 200；`offset` 用于翻页，当 `offset + returned < total` 时还有下一页。排序固定 `created_at ASC`（加入顺序）。\n\n每个成员带 `enterprise_role`（0 成员 / 1 管理员）与 `is_owner`（主管理员 = 资源持有人/付费方）。\n\n错误：`1004` 密钥无效 / 密钥与自报 `product_code` 不一致、`2007` 企业不存在或未激活、`1001` 参数错误。",
         "parameters": [
           {
             "name": "enterprise_id",
@@ -1974,11 +1974,23 @@
               "example": 50,
               "type": "number"
             }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "跳过多少条，配合 `limit` 做分页（默认 0）。当 `offset + returned < total` 时还有下一页；成员按 `created_at ASC` 排序，翻页期间有人加入可能边界重复，按 `portal_user_id` 去重即可",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "example": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "统一响应壳，data 为账号池",
+            "description": "统一响应壳，data 为企业成员列表",
             "content": {
               "application/json": {
                 "schema": {
@@ -1989,7 +2001,7 @@
           }
         },
         "tags": [
-          "内网 · 企业账号 internal"
+          "内网 · 企业成员 internal"
         ],
         "security": [
           {
@@ -4630,6 +4642,20 @@
               1
             ],
             "example": 0
+          },
+          "enterprise_role": {
+            "type": "number",
+            "description": "企业内角色：`0` 普通成员 · `1` 企业管理员。产品侧做成员列表时用它标出\"谁是管理员\"。⚠️ 它只代表**门户里**的企业管理员身份，不等于你产品内的管理员",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          },
+          "is_owner": {
+            "type": "boolean",
+            "description": "是否为主管理员（创建者 / **资源持有人 / 付费方**），一个企业只有一个。要判断\"谁能充值/付费\"看这个，不要看 `enterprise_role`",
+            "example": false
           }
         },
         "required": [
@@ -4638,7 +4664,9 @@
           "phone",
           "enterprise_id",
           "user_type",
-          "status"
+          "status",
+          "enterprise_role",
+          "is_owner"
         ]
       },
       "InternalEnterpriseAccountListView": {
@@ -4659,6 +4687,11 @@
             "description": "本次返回条数（≤ limit）",
             "example": 12
           },
+          "offset": {
+            "type": "number",
+            "description": "本次跳过的条数（回显请求的 `offset`）",
+            "example": 0
+          },
           "list": {
             "description": "候选账号列表",
             "type": "array",
@@ -4671,6 +4704,7 @@
           "enterprise_id",
           "total",
           "returned",
+          "offset",
           "list"
         ]
       },

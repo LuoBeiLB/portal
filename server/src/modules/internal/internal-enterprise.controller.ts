@@ -7,9 +7,9 @@ import { InternalKeyGuard } from '../../common/auth/internal-key.guard';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
 import { Public } from '../../common/auth/public.decorator';
 import { BizException, ErrorCode } from '../../common/error/error-code';
-import { UserType } from '../user/entities/user-status.enum';
+import { EnterpriseEntity, EnterpriseRole, EnterpriseStatus } from '../enterprise/entities/enterprise.entity';
+import { queryEnterpriseMembers } from '../enterprise/enterprise-member.query';
 import { UserEntity } from '../user/entities/user.entity';
-import { EnterpriseEntity, EnterpriseStatus } from '../enterprise/entities/enterprise.entity';
 import { InternalEnterpriseAccountQueryDto } from './dto/internal-enterprise.dto';
 import {
   InternalEnterpriseAccountListView,
@@ -20,28 +20,43 @@ import {
 const DEFAULT_LIMIT = 50;
 
 /**
- * 内网 · 企业账号池（产品 → 门户）。
+ * 内网 · 企业成员（产品 → 门户）。
  *
  * ## 为什么需要这个接口
  *
- * 账号的唯一来源是门户（`docs/22` §2.2）：产品侧**不建号、不存密码**，
- * 企业管理员在"加入成员"时要**从门户的账号池里挑人**，而不是让用户手输账号。
+ * 账号的唯一来源是门户（`docs/22` §2.2）：产品侧**不建号、不存密码**。
+ * 企业权限管理要挂成员、要挑人加入、要知道谁是管理员——**必须从这里拿**。
  * 没有它，产品侧的「加入成员」只能靠人肉核对账号是否存在。
+ *
+ * ## 与 `GET /api/enterprise/users` 的关系
+ *
+ * 两个接口**不是重复**，鉴权轴不同、不能合并成一个：
+ *
+ * | | 本接口 | `/api/enterprise/users` |
+ * |---|---|---|
+ * | 调用方 | 产品后端 | 门户管理端（企业管理员，浏览器） |
+ * | 鉴权 | `X-Internal-Key` | JWT + `EnterpriseAdminGuard` |
+ * | 能查谁 | **任意企业**（产品要服务多企业） | 只能查自己那一家 |
+ *
+ * 但**底下是同一条查询**（`queryEnterpriseMembers`），保证两边看到的成员集合与顺序一致。
+ * 2026-10-27 之前这里是内联写的一份独立实现，排序和字段都与门户那份不同，已收敛。
  *
  * ## 安全约束
  *
- * - 走 `X-Internal-Key`（`InternalKeyGuard`），**必须由防火墙/nginx 保证不对公网暴露**
+ * - 走 `X-Internal-Key`，**必须由防火墙/nginx 保证不对公网暴露**
  * - **只返回查询参数指定的那一家企业**的账号，不存在"查全部"的分支
- * - 只返回展示必需的字段（不含余额、密码哈希、角色）
+ * - 不返回余额、密码哈希、手机号以外的隐私字段
+ *
+ * ⚠️ `enterprise_id` 由调用方声明 —— 一把密钥可以查**任意企业**的成员名单。
+ * 这是"产品要服务多企业"的必然代价（和 `deduct` 能扣任意用户的钱同类），
+ * 前提是内网隔离 + 密钥不外泄。
  *
  * ## 为什么企业不是 active 就直接报 2007
  *
- * `pending`（还没指定所有者）/ `disabled` 的企业，其账号**连门户都登录不了**
- * （登录与刷新都会拦）。
- * 这种情况下把账号返回给产品去"挑人"，只会让人挑完加进产品、结果对方登不进来。
- * 与其让产品侧自己判，不如这里直接说清。
+ * `pending` / `rejected` / `disabled` 的企业，其账号**连门户都登录不了**（登录与刷新都会拦）。
+ * 把账号返回给产品去"挑人"，只会让人挑完加进产品、结果对方登不进来。
  */
-@ApiTags('内网 · 企业账号 internal')
+@ApiTags('内网 · 企业成员 internal')
 @ApiSecurity('internal-key')
 @Public()
 @UseGuards(InternalKeyGuard, ProductScopeGuard)
@@ -53,14 +68,16 @@ export class InternalEnterpriseAccountController {
   ) {}
 
   @ApiOperation({
-    summary: '拉取某企业的账号池（产品侧"加入成员"用）',
+    summary: '拉取某企业的成员（产品侧企业权限管理的数据源）',
     description:
-      '产品 → 门户。返回该企业的候选账号，供产品侧"把门户账号加入本企业"时挑人。\n\n' +
+      '产品 → 门户。返回该企业的成员，供产品侧把门户账号挂进自己的企业权限体系。\n\n' +
       '**只返回 `enterprise_id` 指定的那一家企业**；企业不是 `active` 时返回 `2007`。\n\n' +
-      '`keyword` 同时匹配登录账号与手机号；`limit` 默认 50、上限 200。\n\n' +
+      '`keyword` 同时匹配登录账号与手机号；`limit` 默认 50、上限 200；`offset` 用于翻页，' +
+      '当 `offset + returned < total` 时还有下一页。排序固定 `created_at ASC`（加入顺序）。\n\n' +
+      '每个成员带 `enterprise_role`（0 成员 / 1 管理员）与 `is_owner`（主管理员 = 资源持有人/付费方）。\n\n' +
       '错误：`1004` 密钥无效 / 密钥与自报 `product_code` 不一致、`2007` 企业不存在或未激活、`1001` 参数错误。',
   })
-  @ApiOkResponse({ description: '统一响应壳，data 为账号池', type: InternalEnterpriseAccountListView })
+  @ApiOkResponse({ description: '统一响应壳，data 为企业成员列表', type: InternalEnterpriseAccountListView })
   @Get()
   async list(@Query() query: InternalEnterpriseAccountQueryDto): Promise<InternalEnterpriseAccountListView> {
     const enterpriseId = query.enterprise_id.trim();
@@ -70,22 +87,17 @@ export class InternalEnterpriseAccountController {
       throw new BizException(ErrorCode.ENTERPRISE_UNAVAILABLE);
     }
 
+    const offset = query.offset ?? 0;
     const limit = query.limit ?? DEFAULT_LIMIT;
 
-    /* 只查这一家企业；没有"全部企业"的分支，避免任何越界读取的可能 */
-    const qb = this.users.createQueryBuilder('u');
-    qb.where('u.enterprise_id = :eid', { eid: enterpriseId }).andWhere('u.user_type = :ut', {
-      ut: UserType.ENTERPRISE_STAFF,
+    /* 与门户管理端共用同一条查询：成员集合与顺序两边一致 */
+    const { rows, total } = await queryEnterpriseMembers(this.users, enterpriseId, {
+      keyword: query.keyword,
+      limit,
+      offset,
     });
 
-    const keyword = query.keyword?.trim();
-    if (keyword) {
-      qb.andWhere('(u.username LIKE :kw OR u.phone LIKE :kw)', { kw: `%${keyword}%` });
-    }
-
-    qb.orderBy('u.created_at', 'ASC').addOrderBy('u.id', 'ASC').take(limit);
-
-    const [rows, total] = await qb.getManyAndCount();
+    const ownerUserId = enterprise.ownerUserId ? String(enterprise.ownerUserId) : null;
     const list: InternalEnterpriseAccountView[] = rows.map((u) => ({
       portal_user_id: u.id,
       username: u.username,
@@ -93,8 +105,10 @@ export class InternalEnterpriseAccountController {
       enterprise_id: String(u.enterpriseId),
       user_type: u.userType,
       status: u.status,
+      enterprise_role: u.enterpriseRole === EnterpriseRole.ADMIN ? EnterpriseRole.ADMIN : EnterpriseRole.MEMBER,
+      is_owner: ownerUserId === u.id,
     }));
 
-    return { enterprise_id: enterpriseId, total, returned: list.length, list };
+    return { enterprise_id: enterpriseId, total, returned: list.length, offset, list };
   }
 }

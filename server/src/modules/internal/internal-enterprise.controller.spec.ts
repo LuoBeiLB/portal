@@ -45,7 +45,8 @@ interface Harness {
     andWhere: jest.Mock;
     orderBy: jest.Mock;
     addOrderBy: jest.Mock;
-    take: jest.Mock;
+    offset: jest.Mock;
+    limit: jest.Mock;
     getManyAndCount: jest.Mock;
   };
   enterprises: { findOne: jest.Mock };
@@ -57,14 +58,16 @@ function harness(rows: UserEntity[] = []): Harness {
     andWhere: jest.fn(),
     orderBy: jest.fn(),
     addOrderBy: jest.fn(),
-    take: jest.fn(),
+    offset: jest.fn(),
+    limit: jest.fn(),
     getManyAndCount: jest.fn().mockResolvedValue([rows, rows.length]),
   };
   qb.where.mockReturnValue(qb);
   qb.andWhere.mockReturnValue(qb);
   qb.orderBy.mockReturnValue(qb);
   qb.addOrderBy.mockReturnValue(qb);
-  qb.take.mockReturnValue(qb);
+  qb.offset.mockReturnValue(qb);
+  qb.limit.mockReturnValue(qb);
 
   const users = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
   const enterprises = { findOne: jest.fn().mockResolvedValue(enterpriseOf()) };
@@ -136,14 +139,29 @@ describe('InternalEnterpriseAccountController（产品侧拉账号池）', () =>
     expect(h.qb.andWhere.mock.calls.some((c) => String(c[0]).includes('LIKE'))).toBe(false);
   });
 
-  it('limit 默认 50，上限由 DTO 校验；这里只验证默认值生效', async () => {
+  it('limit 默认 50，可覆盖；offset 默认 0', async () => {
     const h = harness([userOf()]);
     await h.controller.list({ enterprise_id: '1' });
-    expect(h.qb.take).toHaveBeenCalledWith(50);
+    expect(h.qb.limit).toHaveBeenCalledWith(50);
+    expect(h.qb.offset).toHaveBeenCalledWith(0);
 
     const h2 = harness([userOf()]);
-    await h2.controller.list({ enterprise_id: '1', limit: 10 });
-    expect(h2.qb.take).toHaveBeenCalledWith(10);
+    await h2.controller.list({ enterprise_id: '1', limit: 10, offset: 20 });
+    expect(h2.qb.limit).toHaveBeenCalledWith(10);
+    expect(h2.qb.offset).toHaveBeenCalledWith(20);
+  });
+
+  it('排序与门户管理端一致：created_at ASC（加入顺序）', async () => {
+    const h = harness([userOf()]);
+    await h.controller.list({ enterprise_id: '1' });
+    expect(h.qb.orderBy).toHaveBeenCalledWith('u.created_at', 'ASC');
+    expect(h.qb.addOrderBy).toHaveBeenCalledWith('u.id', 'ASC');
+  });
+
+  it('响应回显 offset，便于产品侧判断还有没有下一页', async () => {
+    const h = harness([userOf()]);
+    const result = await h.controller.list({ enterprise_id: '1', offset: 40 });
+    expect(result.offset).toBe(40);
   });
 
   it('响应只含展示必需字段，**不含**余额/密码哈希/角色', async () => {
@@ -152,10 +170,39 @@ describe('InternalEnterpriseAccountController（产品侧拉账号池）', () =>
 
     const item = result.list[0] as unknown as Record<string, unknown>;
     expect(Object.keys(item).sort()).toEqual(
-      ['enterprise_id', 'phone', 'portal_user_id', 'status', 'user_type', 'username'].sort(),
+      [
+        'enterprise_id',
+        'enterprise_role',
+        'is_owner',
+        'phone',
+        'portal_user_id',
+        'status',
+        'user_type',
+        'username',
+      ].sort(),
     );
     expect(item.portal_user_id).toBe('u-1');
     expect(item.enterprise_id).toBe('1');
+  });
+
+  it('企业角色与主管理员标识正确映射（产品侧据此标出管理员）', async () => {
+    const admin = userOf({ id: 'u-admin' });
+    (admin as unknown as Record<string, unknown>).enterpriseRole = 1;
+    const h = harness([admin]);
+    h.enterprises.findOne.mockResolvedValue(enterpriseOf({ ownerUserId: 'u-admin' }));
+
+    const result = await h.controller.list({ enterprise_id: '1' });
+    expect(result.list[0]?.enterprise_role).toBe(1);
+    expect(result.list[0]?.is_owner).toBe(true);
+
+    /* 普通成员：er=0 且不是 owner */
+    const member = userOf({ id: 'u-member' });
+    (member as unknown as Record<string, unknown>).enterpriseRole = 0;
+    const h2 = harness([member]);
+    h2.enterprises.findOne.mockResolvedValue(enterpriseOf({ ownerUserId: 'u-admin' }));
+    const r2 = await h2.controller.list({ enterprise_id: '1' });
+    expect(r2.list[0]?.enterprise_role).toBe(0);
+    expect(r2.list[0]?.is_owner).toBe(false);
   });
 
   it('返回 total 与 returned 两个口径（total 不受 limit 影响）', async () => {
