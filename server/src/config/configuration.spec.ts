@@ -125,6 +125,6 @@ describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', (
     const config = loadConfig();
     expect(config.jwt.current.privateKey).toBe('');
     expect(config.jwt.current.publicKey).toBe('');
-    expect(config.jwt.previous).toEqual([]);
+    /* jwt.previous 已于 2026-10-28 删除：轮换期历史公钥改由 p_service_key 表表达（docs/27） */
   });
 });

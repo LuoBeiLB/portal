@@ -63,10 +63,13 @@ export interface RedisConfig {
 }
 
 export interface JwtConfig {
-  /** 当前签发用密钥（含 kid） */
+  /** 当前签发用密钥（含 kid）。公钥留空时由私钥派生（TokenModule） */
   current: JwtKeyPair;
-  /** 历史公钥：轮换后仍需可验签旧 token，映射 kid -> publicKey */
-  previous: Array<{ kid: string; publicKey: string }>;
+  /*
+   * 2026-10-28 删除 `previous`（原 JWT_PREVIOUS_n_KID / _PUBLIC_KEY）：
+   * JWKS 改为从 p_service_key 表输出（docs/27），轮换期的历史公钥由**表里的多行**表达，
+   * 配置里的那份变成了没人读的死配置 —— 留着只会让下一个人以为还要配 JWT_PREVIOUS_1_*。
+   */
   issuer: string;
   /** access token 有效期（秒），契约 1.2 为 7200 */
   accessTtlSeconds: number;
@@ -209,18 +212,6 @@ export function loadConfig(): PortalConfig {
   const env = (process.env.NODE_ENV ?? 'development') as NodeEnv;
   const isProd = env === 'production';
 
-  const previousKeys: Array<{ kid: string; publicKey: string }> = [];
-  // 轮换期历史公钥：JWT_PREVIOUS_1_KID / JWT_PREVIOUS_1_PUBLIC_KEY(_FILE)
-  for (let index = 1; index <= 3; index += 1) {
-    const kid = process.env[`JWT_PREVIOUS_${index}_KID`];
-    const pem = loadPem(
-      process.env[`JWT_PREVIOUS_${index}_PUBLIC_KEY_FILE`],
-      process.env[`JWT_PREVIOUS_${index}_PUBLIC_KEY`],
-      `previous-${index}`,
-    );
-    if (kid && pem) previousKeys.push({ kid, publicKey: pem });
-  }
-
   return {
     app: {
       env,
@@ -251,7 +242,6 @@ export function loadConfig(): PortalConfig {
         privateKey: loadPem(process.env.JWT_PRIVATE_KEY_FILE, process.env.JWT_PRIVATE_KEY, 'private'),
         publicKey: loadPem(process.env.JWT_PUBLIC_KEY_FILE, process.env.JWT_PUBLIC_KEY, 'public'),
       },
-      previous: previousKeys,
       issuer: process.env.JWT_ISSUER ?? 'cloud-portal',
       accessTtlSeconds: int(process.env.JWT_ACCESS_TTL, 7200),
       refreshTtlSeconds: int(process.env.JWT_REFRESH_TTL, 1209600),

@@ -8,8 +8,10 @@
  *
  * 注意：
  * - `keys/` 已在 .gitignore 中，**私钥永远不要提交或写入任何文档**。
- * - 轮换时：新密钥设为当前（JWT_KID / JWT_PRIVATE_KEY_FILE / JWT_PUBLIC_KEY_FILE），
- *   旧公钥挂到 JWT_PREVIOUS_n_KID / JWT_PREVIOUS_n_PUBLIC_KEY_FILE，等旧 token 全部过期后再摘除。
+ * - 公钥文件已**可选**（2026-10-28）：验用户 token 的公钥由私钥派生；
+ *   对外发布的公钥（含轮换期历史）由 p_service_key 表表达，JWKS 从表输出（docs/27）。
+ * - 轮换时：① 新公钥先入 p_service_key（门户启动自动写或运维 SQL）
+ *   ② 改 JWT_KID + JWT_PRIVATE_KEY_FILE 指向新私钥 ③ 重启 ④ 观察一周后把旧行 status 置 1。
  * - 产品侧通过 `/.well-known/jwks.json` 取公钥并缓存 12h，kid 不匹配时立即强刷。
  */
 import { generateKeyPairSync } from 'node:crypto';
