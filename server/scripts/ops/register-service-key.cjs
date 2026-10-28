@@ -102,7 +102,43 @@ function loadPublicKey(pemPath) {
     throw new Error('不像 PEM 公钥：缺少 `BEGIN PUBLIC KEY` 头。证书请先用 openssl 提取公钥');
   }
 
-  /* ② 能解析才算合法；③ 统一规范化成 SPKI，否则指纹与门户派生结果对不上 */
+  /*
+   * ② 先自检 base64 与 DER 长度。
+   *
+   * 为什么不直接 createPublicKey：它只会抛出
+   * `error:1E08010C:DECODER routines::unsupported` —— 这句话对运维毫无信息量。
+   * 而实际最常见的故障是"从聊天窗口复制 PEM，长行被重排、丢了几个字符"，
+   * 那种情况下 base64 体长度不是 4 的倍数、DER 声明长度对不上，可以直接指出来。
+   */
+  const block = raw.match(/-----BEGIN ([^-]+)-----([\s\S]*?)-----END \1-----/);
+  const body = block[2].replace(/\s+/g, '');
+  if (body.length % 4 !== 0) {
+    throw new Error(
+      `PEM 的 base64 体长度是 ${body.length}，不是 4 的倍数 —— 多半是复制时丢了字符。\n` +
+        '  请让对方发**文件**（.pem 附件 / zip），不要从聊天窗口里复制长文本；\n' +
+        '  或让对方重新导出后把文件传过来。',
+    );
+  }
+
+  const der = Buffer.from(body, 'base64');
+  /* DER 头两个字节是 SEQUENCE 标签 + 长度；长度有两种编码，都要能读 */
+  let declared;
+  if (der[1] & 0x80) {
+    const lenBytes = der[1] & 0x7f;
+    let payload = 0;
+    for (let i = 0; i < lenBytes; i += 1) payload = (payload << 8) | der[2 + i];
+    declared = 2 + lenBytes + payload;
+  } else {
+    declared = 2 + der[1];
+  }
+  if (der.length !== declared) {
+    throw new Error(
+      `公钥内容不完整：DER 声明 ${declared} 字节，实际只有 ${der.length} 字节（缺 ${declared - der.length}）。\n` +
+        '  同上，几乎都是复制丢了字符 —— 请让对方发文件。',
+    );
+  }
+
+  /* ③ 能解析才算合法；④ 统一规范化成 SPKI，否则指纹与门户派生结果对不上 */
   let normalized;
   try {
     normalized = createPublicKey(raw).export({ format: 'pem', type: 'spki' }).toString();
@@ -175,6 +211,13 @@ async function cmdRegister(flags) {
   /* 指纹核对：对方在可信渠道（企微/工单）报来的指纹必须一致 */
   if (flags['expect-fingerprint']) {
     const expected = String(flags['expect-fingerprint']).trim().toLowerCase();
+    if (!/^[0-9a-f]{16}$/.test(expected)) {
+      throw new Error(
+        `--expect-fingerprint 要的是 16 位十六进制指纹（如 9bdae85b88e18945），你给的是 "${expected}"。\n` +
+          '  指纹由对方用同一段 PEM 算出来报给你；如果暂时没有，就先不传这个参数，' +
+          '脚本会把算出来的指纹打出来，你再拿去和对方核对。',
+      );
+    }
     if (expected !== fingerprint) {
       throw new Error(
         `指纹不一致，拒绝入库：\n  文件计算=${fingerprint}\n  期望值=${expected}\n` +
