@@ -7,6 +7,7 @@ import { ProductSyncLogEntity } from '../modules/product/entities/product-sync-l
 import { ProductEntity } from '../modules/product/entities/product.entity';
 import { ProductBillReportEntity } from '../modules/reconciliation/entities/product-bill-report.entity';
 import { ReconciliationEntity } from '../modules/reconciliation/entities/reconciliation.entity';
+import { ServiceKeyEntity } from '../modules/service-key/entities/service-key.entity';
 import { UserEntity } from '../modules/user/entities/user.entity';
 import { RechargeApplyEntity } from '../modules/wallet/entities/recharge-apply.entity';
 import { TransactionEntity } from '../modules/wallet/entities/transaction.entity';
@@ -25,6 +26,7 @@ export const PORTAL_ENTITIES = [
   ProvisionJobEntity,
   ProductBillReportEntity,
   ReconciliationEntity,
+  ServiceKeyEntity,
   AuditLogEntity,
   EnterpriseEntity,
 ];
@@ -41,6 +43,7 @@ export {
   ProvisionJobEntity,
   ProductBillReportEntity,
   ReconciliationEntity,
+  ServiceKeyEntity,
   AuditLogEntity,
   EnterpriseEntity,
 };

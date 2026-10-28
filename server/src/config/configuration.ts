@@ -22,13 +22,14 @@ export interface ProductEndpoint {
   code: string;
   /** 产品后端内网地址，如 http://192.168.99.100:8080 */
   baseUrl: string;
-  /** 产品侧调用门户时要带的静态密钥（每产品一码），仅内网可用 */
-  internalKey: string;
   /**
    * 是否参与同步与开通。
    * 一期只接云存储，phone / desktop 还没实现，地址留空 → `enabled = false`，
    * 不参与商品同步（否则每轮都刷 `ECONNREFUSED` 噪音日志）。
-   * 二期接入时把 URL 与密钥填上即自动启用。
+   *
+   * ⚠️ 2026-10-27 起这里**只管出站**（商品同步 / 下发开通）。
+   * 入站鉴权（产品调门户）已改为 RS256 服务凭据，公钥在 `p_service_key` 表，
+   * 与这个开关**完全解耦** —— 早先"清空地址会连带拒掉扣费请求"的坑不存在了。
    */
   enabled: boolean;
 }
@@ -173,60 +174,37 @@ function loadPem(fileEnv: string | undefined, inlineEnv: string | undefined, lab
 }
 
 function loadProducts(): ProductEndpoint[] {
-  const defaults: Array<{ code: string; envBase: string; envKey: string; fallbackBase: string }> = [
-    {
-      code: 'storage',
-      envBase: 'PRODUCT_STORAGE_BASE_URL',
-      envKey: 'PRODUCT_STORAGE_INTERNAL_KEY',
-      fallbackBase: 'http://127.0.0.1:8080',
-    },
-    {
-      code: 'phone',
-      envBase: 'PRODUCT_PHONE_BASE_URL',
-      envKey: 'PRODUCT_PHONE_INTERNAL_KEY',
-      fallbackBase: '',
-    },
-    {
-      code: 'desktop',
-      envBase: 'PRODUCT_DESKTOP_BASE_URL',
-      envKey: 'PRODUCT_DESKTOP_INTERNAL_KEY',
-      fallbackBase: '',
-    },
+  const defaults: Array<{ code: string; envBase: string; fallbackBase: string }> = [
+    { code: 'storage', envBase: 'PRODUCT_STORAGE_BASE_URL', fallbackBase: 'http://127.0.0.1:8080' },
+    { code: 'phone', envBase: 'PRODUCT_PHONE_BASE_URL', fallbackBase: '' },
+    { code: 'desktop', envBase: 'PRODUCT_DESKTOP_BASE_URL', fallbackBase: '' },
     // 下面两项不在契约的产品列表里，仅用于配置规则的单测
     // （需要在 .env 里配地址才会启用，生产永远不会出现）
-    { code: 'testa', envBase: 'PRODUCT_TESTA_BASE_URL', envKey: 'PRODUCT_TESTA_INTERNAL_KEY', fallbackBase: '' },
-    { code: 'testb', envBase: 'PRODUCT_TESTB_BASE_URL', envKey: 'PRODUCT_TESTB_INTERNAL_KEY', fallbackBase: '' },
+    { code: 'testa', envBase: 'PRODUCT_TESTA_BASE_URL', fallbackBase: '' },
+    { code: 'testb', envBase: 'PRODUCT_TESTB_BASE_URL', fallbackBase: '' },
   ];
 
   return (
     defaults
       .map((item) => {
         const baseUrl = (process.env[item.envBase] ?? '').trim().replace(/\/+$/, '');
-        const internalKey = process.env[item.envKey] ?? '';
         return {
           code: item.code,
           baseUrl,
-          internalKey,
           // 地址留空即视为「未接入」：不参与同步，也不在日志里刷连接错误
           enabled: baseUrl.length > 0,
         };
       })
       /**
-       * 保留两类产品：
-       * 1. `enabled`（配了地址）—— 参与商品同步与开通；
-       * 2. **只配了密钥的**（地址为空）—— 仅用于**入站鉴权**，不参与同步。
+       * 只保留配了地址的产品 —— 2026-10-27 起这是**唯一**条件。
        *
-       * 为什么第 2 类必须保留：入站鉴权（产品调门户扣费/退款/报账单）与出站同步是两件独立的事。
-       * 早先只按 `enabled` 过滤，导致「清空某产品的地址以暂停同步」会**连带把它的扣费请求也拒掉**
-       * （密钥不再被加载 → 调用方收到 1002），排查时极难联想到是同步开关引起的。
-       *
-       * 只配密钥的产品在同步侧会被 `ProductSyncService.forSync()` 按 `enabled` 过滤掉，
-       * 开通侧由 `ProductClient.findByCode()` 拦截，不会误发请求。
+       * 以前还有一条"只配了密钥的产品也要保留"，因为入站鉴权要靠配置里的密钥表反查调用方。
+       * 现在入站身份来自 `p_service_key` 表的公钥（`kid` → `owner_code`），
+       * 与 `.env` 里的地址开关彻底解耦，所以那条分支和它的坑一起消失了。
        */
-      .filter((item) => item.enabled || item.internalKey.length > 0)
+      .filter((item) => item.enabled)
   );
 }
-
 export function loadConfig(): PortalConfig {
   const env = (process.env.NODE_ENV ?? 'development') as NodeEnv;
   const isProd = env === 'production';

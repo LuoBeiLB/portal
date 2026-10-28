@@ -5,6 +5,10 @@
  * 原因：应用会在启动时 `process.loadEnvFile('.env')`，而 loadEnvFile 把「空值」视为未设置
  * （不会用空串覆盖已有变量）。若测试直接断言"某产品没配地址"，会被本机 .env 污染。
  * 因此这里用无关的空前缀变量（未在 .env 中出现）来验证规则本身。
+ *
+ * 2026-10-27（docs/27）：产品配置里**不再有任何密钥字段**。
+ * 入站身份改为 `p_service_key` 表（`kid` → `owner_code`），
+ * 所以"地址为空的产品也要保留（供入站鉴权）"这条规则连同它的坑一起删除了。
  */
 process.env.NODE_ENV = 'test';
 process.env.JWT_ISSUER = 'cloud-portal';
@@ -19,9 +23,7 @@ process.env.WALLET_RETRY_BACKOFF_MS = '';
 process.env.MAX_ITEMS_PER_ORDER = '';
 // 只有这两个变量未在 .env 中出现，可安全用于「未接入 → 被剔除」的断言
 process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
-process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a';
 delete process.env.PRODUCT_TESTB_BASE_URL;
-delete process.env.PRODUCT_TESTB_INTERNAL_KEY;
 
 import { loadConfig } from './configuration';
 
@@ -50,47 +52,37 @@ describe('loadConfig（契约 §0.1 / §1.2 / §2.2 / §3.3 / §4.1 / §5）', (
     const testA = config.products.find((item) => item.code === 'testa');
     expect(testA?.enabled).toBe(true);
     expect(testA?.baseUrl).toBe('http://127.0.0.1:8111');
-    expect(testA?.internalKey).toBe('k-a');
   });
 
-  it('地址与密钥都没配的产品不进列表（既不参与同步，也做不了入站鉴权）', () => {
+  it('地址为空的产品不进列表（出站地址是唯一的启用条件）', () => {
     const config = loadConfig();
     expect(config.products.some((item) => item.code === 'testb')).toBe(false);
   });
 
-  it('**只配了密钥、地址为空的产品也进列表**，但标记为仅入站（enabled=false）', () => {
-    process.env.PRODUCT_TESTB_INTERNAL_KEY = 'k-b-inbound-only';
-    delete process.env.PRODUCT_TESTB_BASE_URL;
-
+  /**
+   * 语义变更（docs/27）：`ProductEndpoint` 只剩 `code` / `baseUrl` / `enabled`。
+   *
+   * 以前还有 `internalKey`，"只配了密钥、地址为空"的产品也要保留——因为入站鉴权
+   * 要靠配置里的密钥表反查调用方。现在入站身份来自 `p_service_key` 表，
+   * 与 `.env` 彻底解耦，"清空地址会连带拒掉扣费请求"这个坑从根上消失了。
+   */
+  it('产品配置里不再包含任何密钥字段（入站身份由 p_service_key 决定）', () => {
     const config = loadConfig();
-    const testB = config.products.find((item) => item.code === 'testb');
-
-    // 存在的意义：产品调门户扣费/退款时的 X-Internal-Key 要靠它校验
-    expect(testB).toBeDefined();
-    expect(testB?.internalKey).toBe('k-b-inbound-only');
-    // 但不得参与出站：enabled=false 会被 forSync() 过滤，findByCode() 也会拦
-    expect(testB?.enabled).toBe(false);
-    expect(testB?.baseUrl).toBe('');
-
-    delete process.env.PRODUCT_TESTB_INTERNAL_KEY;
+    expect(config.products.length).toBeGreaterThan(0);
+    for (const item of config.products) {
+      expect(Object.keys(item).sort()).toEqual(['baseUrl', 'code', 'enabled']);
+    }
   });
 
-  it('入站密钥的加载与出站地址解耦：清空地址不会让已配的密钥失效', () => {
-    process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a-decoupled';
+  it('清空地址只影响出站：该产品从 products 列表消失', () => {
     process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
-    const withAddress = loadConfig();
-    expect(withAddress.products.find((item) => item.code === 'testa')?.internalKey).toBe('k-a-decoupled');
+    expect(loadConfig().products.find((item) => item.code === 'testa')?.enabled).toBe(true);
 
-    // 模拟"暂停该产品的商品同步"——只清地址，保留密钥
+    // 模拟"暂停该产品的商品同步"
     delete process.env.PRODUCT_TESTA_BASE_URL;
-    const withoutAddress = loadConfig();
-    const testA = withoutAddress.products.find((item) => item.code === 'testa');
-
-    expect(testA?.internalKey).toBe('k-a-decoupled'); // ← 密钥仍在，入站鉴权不受影响
-    expect(testA?.enabled).toBe(false); // ← 但不再参与同步
+    expect(loadConfig().products.find((item) => item.code === 'testa')).toBeUndefined();
 
     process.env.PRODUCT_TESTA_BASE_URL = 'http://127.0.0.1:8111';
-    process.env.PRODUCT_TESTA_INTERNAL_KEY = 'k-a';
   });
 
   it('环境变量覆盖生效，且 baseUrl 末尾斜杠被规范化', () => {

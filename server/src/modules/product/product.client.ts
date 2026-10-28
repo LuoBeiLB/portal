@@ -4,6 +4,7 @@ import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 
 import { PortalConfigService } from '../../config/portal-config.service';
+import { ServiceTokenService } from '../service-key/service-token.service';
 import { ProductEndpoint } from '../../config/configuration';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 
@@ -92,6 +93,7 @@ export class ProductClient {
   constructor(
     private readonly http: HttpService,
     private readonly config: PortalConfigService,
+    private readonly serviceTokens: ServiceTokenService,
   ) {}
 
   /** 已配置的产品端点 */
@@ -121,11 +123,10 @@ export class ProductClient {
   async fetchProducts(productCode: string): Promise<RemoteProduct[]> {
     const endpoint = this.findByCode(productCode);
     const url = `${endpoint.baseUrl}/internal/products`;
-    console.log(`fetchProducts: GET ${url} (X-Internal-Key=${endpoint.internalKey})`);
     const response = await firstValueFrom(
       this.http.get<ProductEnvelope<{ products: RemoteProduct[] }>>(url, {
         timeout: this.config.shop.productTimeoutMs,
-        headers: this.internalHeaders(endpoint),
+        headers: await this.serviceHeaders(endpoint),
       }),
     );
 
@@ -149,7 +150,7 @@ export class ProductClient {
       response = await firstValueFrom(
         this.http.post<ProductEnvelope<ProvisionResult>>(url, payload, {
           timeout: this.config.shop.provisionTimeoutMs,
-          headers: this.internalHeaders(endpoint),
+          headers: await this.serviceHeaders(endpoint, payload),
         }),
       );
     } catch (error) {
@@ -180,13 +181,26 @@ export class ProductClient {
     };
   }
 
-  private internalHeaders(endpoint: ProductEndpoint): Record<string, string> {
-    if (!endpoint.internalKey) {
-      this.logger.warn(`产品 ${endpoint.code} 未配置 X-Internal-Key，调用可能被拒`);
-    }
+  /**
+   * 出站认证：每次调产品都**现签一个 60 秒的服务凭据**（docs/27 §3.2）。
+   *
+   * 为什么不能缓存复用：`jti` 必须每请求唯一，否则产品侧会判成重放。
+   * RSA-2048 签名约 1ms，可以接受。
+   *
+   * ⚠️ 绝对不要把 token 打进日志 —— 早先这里有一行 `console.log` 把 `X-Internal-Key`
+   * 原文写进日志，等于每天都在泄漏一把能扣任意用户钱的密钥。
+   */
+  private async serviceHeaders(
+    endpoint: ProductEndpoint,
+    payload?: ProvisionRequest,
+  ): Promise<Record<string, string>> {
+    const token = await this.serviceTokens.issue(endpoint.code, {
+      ...(payload?.order_item_id ? { order_item_id: payload.order_item_id } : {}),
+      ...(payload?.portal_user_id ? { portal_user_id: payload.portal_user_id } : {}),
+    });
     return {
       'content-type': 'application/json',
-      'x-internal-key': endpoint.internalKey,
+      authorization: `Bearer ${token}`,
     };
   }
 }

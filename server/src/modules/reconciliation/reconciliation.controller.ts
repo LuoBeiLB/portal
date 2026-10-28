@@ -4,7 +4,7 @@ import { Request } from 'express';
 
 import { AdminGuard } from '../../common/auth/admin.guard';
 import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
-import { InternalKeyGuard } from '../../common/auth/internal-key.guard';
+import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -95,7 +95,7 @@ export class AdminReconciliationController {
 @ApiTags('内网计费 internal')
 @ApiSecurity('internal-key')
 @Public()
-@UseGuards(InternalKeyGuard, ProductScopeGuard)
+@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('internal/reconciliation')
 export class InternalReconciliationController {
   constructor(private readonly reconciliation: ReconciliationService) {}

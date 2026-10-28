@@ -3,7 +3,7 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { InternalKeyGuard } from '../../common/auth/internal-key.guard';
+import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
 import { Public } from '../../common/auth/public.decorator';
 import { BizException, ErrorCode } from '../../common/error/error-code';
@@ -59,7 +59,7 @@ const DEFAULT_LIMIT = 50;
 @ApiTags('内网 · 企业成员 internal')
 @ApiSecurity('internal-key')
 @Public()
-@UseGuards(InternalKeyGuard, ProductScopeGuard)
+@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('internal/enterprise-accounts')
 export class InternalEnterpriseAccountController {
   constructor(

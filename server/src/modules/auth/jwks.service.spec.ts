@@ -1,7 +1,8 @@
 import { generateKeyPairSync } from 'node:crypto';
 
-import { PortalConfigService } from '../../config/portal-config.service';
 import { JwksService, kidFingerprint, toJwk } from './jwks.service';
+import { ServiceKeyService } from '../service-key/service-key.service';
+import { ServiceKey } from '../service-key/service-key.service';
 
 function keyPair(): { privateKey: string; publicKey: string } {
   return generateKeyPairSync('rsa', {
@@ -11,16 +12,38 @@ function keyPair(): { privateKey: string; publicKey: string } {
   });
 }
 
+/**
+ * `docs/27` 之后 JWKS 不再从配置读公钥，而是从 `ServiceKeyService`（`p_service_key` 表）取。
+ * 这里用假缓存驱动，验证输出结构与"只吐 portal 主体"的过滤。
+ */
+function serviceWith(keys: ServiceKey[]): JwksService {
+  const fake = {
+    jwks: () => ({
+      keys: keys
+        .filter((k) => k.ownerCode === 'portal')
+        .map((k) => toJwk(k.kid, k.publicKeyPem)),
+    }),
+  } as unknown as ServiceKeyService;
+  return new JwksService(fake);
+}
+
 describe('JwksService（契约 §1.5）', () => {
   const current = keyPair();
   const previous = keyPair();
+  const product = keyPair();
 
-  const service = new JwksService({
-    jwt: {
-      current: { kid: 'portal-2026-10', privateKey: current.privateKey, publicKey: current.publicKey },
-      previous: [{ kid: 'portal-2026-09', publicKey: previous.publicKey }],
-    },
-  } as unknown as PortalConfigService);
+  const asKey = (kid: string, pem: string, ownerCode = 'portal'): ServiceKey => ({
+    ownerCode,
+    kid,
+    publicKeyPem: pem,
+    notBefore: null,
+    notAfter: null,
+  });
+
+  const service = serviceWith([
+    asKey('portal-2026-10', current.publicKey),
+    asKey('portal-2026-09', previous.publicKey),
+  ]);
 
   it('toJwk 产出标准 RSA 公钥字段（kty/alg/use/kid/n/e）', () => {
     const jwk = toJwk('portal-2026-10', current.publicKey);
@@ -40,11 +63,18 @@ describe('JwksService（契约 §1.5）', () => {
     expect(serialized).not.toContain('d='); // RSA 私钥指数 d 绝不能出现
   });
 
+  it('只输出 owner_code=portal 的公钥，产品公钥不得进 JWKS', () => {
+    const mixed = serviceWith([
+      asKey('portal-2026-10', current.publicKey),
+      asKey('storage-2026-10', product.publicKey, 'storage'),
+    ]);
+    const kids = mixed.list().keys.map((key) => key.kid);
+    expect(kids).toEqual(['portal-2026-10']);
+    expect(kids).not.toContain('storage-2026-10');
+  });
+
   it('未配置公钥时返回空 keys 而不是抛错（服务可正常启动）', () => {
-    const empty = new JwksService({
-      jwt: { current: { kid: 'k', privateKey: '', publicKey: '' }, previous: [] },
-    } as unknown as PortalConfigService);
-    expect(empty.list()).toEqual({ keys: [] });
+    expect(serviceWith([]).list()).toEqual({ keys: [] });
   });
 
   it('kidFingerprint 用于排障比对，稳定且不泄露密钥', () => {

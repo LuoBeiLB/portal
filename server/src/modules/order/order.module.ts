@@ -12,6 +12,7 @@ import { ProductEntity } from '../product/entities/product.entity';
 import { ProductSyncLogEntity } from '../product/entities/product-sync-log.entity';
 import { ProductClient } from '../product/product.client';
 import { ProductModule } from '../product/product.module';
+import { ServiceKeyModule } from '../service-key/service-key.module';
 import { ProvisionWorker } from './provision.worker';
 
 /**
@@ -25,6 +26,9 @@ import { ProvisionWorker } from './provision.worker';
     HttpModule.register({ maxRedirects: 0 }),
     TypeOrmModule.forFeature([OrderEntity, OrderItemEntity, ProvisionJobEntity, ProductEntity, ProductSyncLogEntity]),
     ProductModule,
+    /* ProductClient 在本模块也作为 provider 声明（历史原因），
+       它现在依赖 ServiceTokenService 签出站服务凭据（docs/27），所以必须能解析到该 provider */
+    ServiceKeyModule,
     WalletModule,
   ],
   controllers: [ShopController],

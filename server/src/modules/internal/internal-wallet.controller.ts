@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 
 import { DeductView, RefundView } from '../../common/dto/common.vo';
 import { BizException, ErrorCode } from '../../common/error/error-code';
-import { InternalKeyGuard } from '../../common/auth/internal-key.guard';
+import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -27,7 +27,7 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
 @ApiTags('内网计费 internal')
 @ApiSecurity('internal-key')
 @Public()
-@UseGuards(InternalKeyGuard, ProductScopeGuard)
+@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('wallet')
 export class InternalWalletController {
   constructor(

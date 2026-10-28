@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthRateLimit } from '../../common/auth/auth-rate-limit';
+import { ServiceKeyModule } from '../service-key/service-key.module';
 import { AuditModule } from '../audit/audit.module';
 import { UserEntity } from '../user/entities/user.entity';
 import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
@@ -21,7 +22,7 @@ import { TokenService } from './token.service';
  */
 @Module({
   // AuditModule 提供 AuditService（改密码要写审计日志）；它是全局模块，不引入循环依赖
-  imports: [TypeOrmModule.forFeature([UserEntity, WalletEntity, EnterpriseEntity]), AuditModule],
+  imports: [TypeOrmModule.forFeature([UserEntity, WalletEntity, EnterpriseEntity]), AuditModule, ServiceKeyModule],
   controllers: [AuthController, JwksController],
   // RateLimiterService 由全局 RateLimiterModule 提供（公开接口也要限流）
   providers: [AuthService, PasswordService, TokenService, JwksService, AuthRateLimit],

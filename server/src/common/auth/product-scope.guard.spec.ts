@@ -18,7 +18,7 @@ function contextOf(request: FakeRequest): ExecutionContext {
 }
 
 const guard = new ProductScopeGuard();
-const asStorage: InternalProduct = { code: 'storage', key: 'key-storage' };
+const asStorage: InternalProduct = { code: 'storage', keyId: 'storage-2026-10' };
 
 describe('ProductScopeGuard（body 自报的 product_code 必须与密钥归属一致）', () => {
   it('未自报 product_code → 放行（身份以密钥为准）', () => {

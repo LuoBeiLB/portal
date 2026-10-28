@@ -18,7 +18,9 @@ if (existsSync(envFile)) {
 }
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // rawBody 必须开启：内网服务凭据要对**原始字节**算 sha256（docs/27 §3.3）。
+  // 用 express.json() 反序列化后再序列化算 hash 会因字段顺序/空格差异导致验签失败。
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(PortalConfigService);
 
   // 契约 §0.1：用户浏览器访问 https://<公网IP>/api/*
