@@ -22,7 +22,9 @@
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
     "migration:show": "npm run typeorm -- migration:show",
-    "keys:generate": "ts-node --project tsconfig.scripts.json scripts/tools/generate-jwt-keys.ts"
+    "keys:generate": "ts-node --project tsconfig.scripts.json scripts/tools/generate-jwt-keys.ts",
+    "keys:register": "node scripts/ops/register-service-key.cjs",
+    "keys:list": "node scripts/ops/register-service-key.cjs list"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.2",
