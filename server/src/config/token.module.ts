@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { createPublicKey } from 'node:crypto';
 
 import { PortalConfigService } from './portal-config.service';
 
@@ -22,7 +23,20 @@ import { PortalConfigService } from './portal-config.service';
         }
         return {
           privateKey: config.jwt.current.privateKey,
-          publicKey: config.jwt.current.publicKey || undefined,
+          /*
+           * 公钥**从私钥派生**，不再依赖 `JWT_PUBLIC_KEY_FILE`。
+           *
+           * 为什么：全局 `JwtService` 用它验**用户 token**（JwtAuthGuard 不传钥匙，
+           * 用的就是这里的模块级公钥）。公私钥若分别来自两个文件，轮换时忘同步就会
+           * 变成"签得出来、验不过"，症状是所有人 401 —— 从私钥派生从根上没有这个可能。
+           *
+           * 显式配置仍优先：万一要单独指定公钥（极少见），配了就用配置。
+           */
+          publicKey:
+            config.jwt.current.publicKey ||
+            createPublicKey(config.jwt.current.privateKey)
+              .export({ format: 'pem', type: 'spki' })
+              .toString(),
           signOptions: {
             algorithm: 'RS256' as const,
             issuer: config.jwt.issuer,
