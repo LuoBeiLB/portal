@@ -1894,7 +1894,7 @@
         ],
         "security": [
           {
-            "internal-key": []
+            "service-bearer": []
           }
         ]
       }
@@ -1932,7 +1932,7 @@
         ],
         "security": [
           {
-            "internal-key": []
+            "service-bearer": []
           }
         ]
       }
@@ -2005,7 +2005,7 @@
         ],
         "security": [
           {
-            "internal-key": []
+            "service-bearer": []
           }
         ]
       }
@@ -2335,7 +2335,7 @@
       "post": {
         "operationId": "InternalReconciliationController_report",
         "summary": "产品账单上报（契约外补充，对账前置）",
-        "description": "产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n**`product_code` 以 `X-Internal-Key` 的归属为准**：传了必须一致（否则 1004），不传则按密钥推定。\n\n需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。",
+        "description": "产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n**`product_code` 以服务凭据的 `iss`（公钥归属）为准**：传了必须一致（否则 1004），不传则按其推定。\n\n需要 RS256 服务凭据。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -2364,7 +2364,7 @@
         ],
         "security": [
           {
-            "internal-key": []
+            "service-bearer": []
           }
         ]
       }
@@ -2425,23 +2425,27 @@
   "tags": [
     {
       "name": "认证 auth",
-      "description": "契约 §1"
+      "description": "契约 §1：注册 / 登录 / 刷新 / 登出 / JWKS / 改密"
     },
     {
       "name": "钱包 wallet",
-      "description": "契约 §3"
+      "description": "契约 §3：余额 / 流水 / 充值申请"
     },
     {
       "name": "内网计费 internal",
-      "description": "契约 §4（产品 → 门户）"
+      "description": "契约 §4：产品 → 门户（RS256 服务凭据，仅内网）"
+    },
+    {
+      "name": "内网 · 企业成员 internal",
+      "description": "产品 → 门户：拉某企业成员（RS256 服务凭据）"
     },
     {
       "name": "管理端 admin",
-      "description": "契约 §6"
+      "description": "契约 §6：充值核销 / 用户管理 / 流水与日志 / 管理员账号（Bearer，需 role=admin）"
     },
     {
       "name": "商城 shop",
-      "description": "契约 §2（round 3）"
+      "description": "契约 §2：商品与订单（round 3 实现）"
     },
     {
       "name": "运维 ops",
@@ -2454,12 +2458,14 @@
       "bearer": {
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "type": "http"
+        "type": "http",
+        "description": "**用户** access token（门户签发，RS256，2h）。不用于 /api/internal/*、/api/wallet/* —— 那些走服务凭据"
       },
-      "internal-key": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-Internal-Key"
+      "service-bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT (RS256 服务凭据)",
+        "type": "http",
+        "description": "产品私钥签发的服务凭据（60 秒有效，aud=cloud-portal，含 htm/htu/qs/body_sha256/jti）。\n\n由产品方在自己服务里签，**不是从门户获取**；门户用 p_service_key 中该产品的公钥验签。"
       }
     },
     "schemas": {
@@ -4490,7 +4496,7 @@
           },
           "product_code": {
             "type": "string",
-            "description": "本产品代码。**可选**：不传则按 X-Internal-Key 的归属推定；传了必须与密钥归属一致，否则 1004",
+            "description": "本产品代码。**可选**：不传则按服务凭据的 `iss`（即公钥归属）推定；传了必须一致，否则 1004",
             "enum": [
               "storage",
               "phone",

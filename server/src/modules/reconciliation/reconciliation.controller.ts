@@ -19,7 +19,7 @@ import { ProvisionJobsView, ReconciliationView, ReportBillsView } from '../../co
 /**
  * 对账相关接口。
  * - `/api/admin/reconciliation/*`：管理端（**管理员账号**，`role=admin` 的 JWT）
- * - `/api/internal/reconciliation/report`：产品侧上报账单（X-Internal-Key）
+ * - `/api/internal/reconciliation/report`：产品侧上报账单（RS256 服务凭据）
  *
  * ⚠️ 管理端**刻意不标 `@Public()`**：必须经过全局 JwtAuthGuard 填充 `request.user`，
  * `AdminGuard` 才能读到角色（2026-10-10 起废弃静态 X-Admin-Key）。
@@ -93,7 +93,7 @@ export class AdminReconciliationController {
 }
 
 @ApiTags('内网计费 internal')
-@ApiSecurity('internal-key')
+@ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('internal/reconciliation')
@@ -105,8 +105,8 @@ export class InternalReconciliationController {
     description:
       '产品侧把当日账单推给门户，门户据此与自己的流水逐笔比对。\n\n' +
       '幂等：以 `(biz_date, product_code, bill_no)` 唯一，重复上报覆盖金额。\n\n' +
-      '**`product_code` 以 `X-Internal-Key` 的归属为准**：传了必须一致（否则 1004），不传则按密钥推定。\n\n' +
-      '需要 `X-Internal-Key`。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。',
+      '**`product_code` 以服务凭据的 `iss`（公钥归属）为准**：传了必须一致（否则 1004），不传则按其推定。\n\n' +
+      '需要 RS256 服务凭据。产品侧不推也可以：把账单导出成 CSV 走人工对账，但自动对账会缺数据。',
   })
   @HttpCode(200)
   @ApiOkResponse({ description: '统一响应壳，data 为接收与落库条数', type: ReportBillsView })

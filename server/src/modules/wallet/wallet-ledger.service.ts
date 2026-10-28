@@ -170,7 +170,7 @@ export class WalletLedgerService {
     amountCents: number;
     reason?: string | null;
     /**
-     * 调用方产品身份（来自 X-Internal-Key 的归属）。传入时会校验原账单是否属于该产品：
+     * 调用方产品身份（来自服务凭据 `iss`，即公钥归属）。传入时会校验原账单是否属于该产品：
      * **产品只能用自己密钥退自己的账单**，否则 1004。
      * 门户内部调用（如订单失败自动退款）不传，跳过该校验。
      */

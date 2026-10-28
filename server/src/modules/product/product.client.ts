@@ -84,7 +84,9 @@ export class ProvisionError extends Error {
  * - `GET /internal/products` 拉商品目录（门户每 10 分钟全量 upsert）
  * - `POST /internal/provision` 开通（幂等键 order_item_id，30s 超时）
  *
- * 鉴权：`X-Internal-Key`，每产品一码。**仅内网调用**，产品侧应保证该路径不对公网暴露。
+ * 鉴权：`Authorization: Bearer <RS256 服务凭据>`（2026-10-27 起，`docs/27`）。
+ * 凭据由门户私钥签发、产品用门户 JWKS 公钥验签，**60 秒有效、每请求唯一 jti**。
+ * **仅内网调用**，产品侧应保证该路径不对公网暴露。
  */
 @Injectable()
 export class ProductClient {

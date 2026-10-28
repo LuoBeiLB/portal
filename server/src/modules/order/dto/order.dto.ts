@@ -96,7 +96,7 @@ export class OrderListQueryDto {
   status?: number;
 }
 
-/** 产品账单上报（对账用；产品侧调用，X-Internal-Key） */
+/** 产品账单上报（对账用；产品侧调用，RS256 服务凭据） */
 export class ReportBillItemDto {
   @ApiProperty({ description: '产品侧账单号', example: 'storage-20261008-000123' })
   @IsString()

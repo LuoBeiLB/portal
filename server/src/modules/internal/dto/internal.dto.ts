@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsObject, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
-/** 契约 §4.1 扣费入参（产品 → 门户，X-Internal-Key） */
+/** 契约 §4.1 扣费入参（产品 → 门户，RS256 服务凭据） */
 export class DeductDto {
   @ApiProperty({ description: '门户用户 UUID（即 JWT 的 sub）', example: '018f3a2b-7c1d-7xxx-9e21-3f9a2b8c1d00' })
   @IsString()
@@ -18,7 +18,8 @@ export class DeductDto {
    * - 传了 → 必须与密钥归属一致，不一致返回 1004（能抓出真实 bug）。
    */
   @ApiPropertyOptional({
-    description: '本产品代码。**可选**：不传则按 X-Internal-Key 的归属推定；传了必须与密钥归属一致，否则 1004',
+    description:
+      '本产品代码。**可选**：不传则按服务凭据的 `iss`（即公钥归属）推定；传了必须一致，否则 1004',
     enum: ['storage', 'phone', 'desktop'],
     example: 'storage',
   })
@@ -54,7 +55,7 @@ export class DeductDto {
   detail?: Record<string, unknown>;
 }
 
-/** 契约 §4.2 退款入参（产品 → 门户，X-Internal-Key） */
+/** 契约 §4.2 退款入参（产品 → 门户，RS256 服务凭据） */
 export class RefundDto {
   @ApiProperty({ description: '原扣费账单号（必须已入账）', example: 'storage-20261005-000123' })
   @IsString()

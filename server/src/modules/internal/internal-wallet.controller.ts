@@ -18,14 +18,14 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
 /**
  * 契约 §4 内网计费接口（产品 → 门户）。
  *
- * ⚠️ 安全前提：这些接口**只校验 X-Internal-Key**，必须由防火墙/nginx 保证不对公网暴露
+ * ⚠️ 安全前提：这些接口只校验 **RS256 服务凭据**（`docs/27`，取代 X-Internal-Key），
  * （契约附录自检项）。响应遵循 §0.2；幂等重复按 §4.1 返回 code=3003 且 data 为首次结果。
  *
  * ⚠️ 产品身份纪律：一律用 `@CurrentInternalProduct()` 拿到的身份（来自密钥归属），
  * **不要**用请求体自报的 `product_code` —— 那是未经验证的声明，会被 ProductScopeGuard 拦。
  */
 @ApiTags('内网计费 internal')
-@ApiSecurity('internal-key')
+@ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('wallet')

@@ -23,44 +23,28 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 process.env.SWAGGER_ENABLED = 'true';
 
 const { NestFactory } = require('@nestjs/core');
-const { SwaggerModule, DocumentBuilder } = require('@nestjs/swagger');
 
 const { AppModule } = require('../../dist/app.module');
 const { PortalConfigService } = require('../../dist/config/portal-config.service');
-const { setupSwagger } = require('../../dist/config/swagger.setup');
+const { buildSwaggerDocument } = require('../../dist/config/swagger.setup');
 
 (async () => {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'] });
-  app.setGlobalPrefix('api', { exclude: ['.well-known/jwks.json'] });
+  /* 与 main.ts 保持一致：JWKS 有标准路径和 /api 别名两条，都要排除全局前缀 */
+  app.setGlobalPrefix('api', { exclude: ['.well-known/jwks.json', 'api/.well-known/jwks.json'] });
 
   const config = app.get(PortalConfigService);
-  setupSwagger(app, config);
+  /* 只为校验配置可解析；文档统一由 buildSwaggerDocument 生成 */
+  void config;
 
-  const builder = new DocumentBuilder()
-    .setTitle('云平台统一门户 API（cloud-portal）')
-    .setDescription(
-      [
-        '依据《云平台统一门户 API 契约 v1.0》（2026-09-30 定稿）实现。',
-        '',
-        '约定提醒：',
-        '- 响应恒为 `{ code, message, data }`，HTTP 状态码基本为 200，**成功与否看 code**；',
-        '- 金额一律整数「分」；时间一律 UTC ISO 8601；',
-        '- 例外：`/.well-known/jwks.json` 返回标准 JWKS，`/api/admin/transactions/export` 返回 CSV，两者不套统一响应壳。',
-      ].join('\n'),
-    )
-    .setVersion('1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')
-    .addApiKey({ type: 'apiKey', name: 'X-Internal-Key', in: 'header' }, 'internal-key')
-    // 2026-10-10 起管理端改用管理员账号（role=admin 的 JWT），X-Admin-Key 方案已删除
-    .addTag('认证 auth', '契约 §1')
-    .addTag('钱包 wallet', '契约 §3')
-    .addTag('内网计费 internal', '契约 §4（产品 → 门户）')
-    .addTag('管理端 admin', '契约 §6')
-    .addTag('商城 shop', '契约 §2（round 3）')
-    .addTag('运维 ops', '探活与元信息')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, builder, { deepScanRoutes: true });
+  /*
+   * 复用 swagger.setup.ts 的 buildSwaggerDocument —— 这是**唯一**的文档定义来源。
+   *
+   * 早先这里自己又 new 了一个 DocumentBuilder（连安全方案都重复声明一遍），
+   * 结果是：swagger.setup.ts 改了 internal-key → service-bearer，导出的 openapi.json 却不变，
+   * 前端/产品侧拿到的是过期契约。这种"两份定义"的坑不值得再踩第二次。
+   */
+  const document = buildSwaggerDocument(app);
 
   const outPath = resolve(process.cwd(), process.argv[2] || 'docs/openapi.json');
   mkdirSync(dirname(outPath), { recursive: true });

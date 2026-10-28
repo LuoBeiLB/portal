@@ -35,7 +35,7 @@ const DEFAULT_LIMIT = 50;
  * | | 本接口 | `/api/enterprise/users` |
  * |---|---|---|
  * | 调用方 | 产品后端 | 门户管理端（企业管理员，浏览器） |
- * | 鉴权 | `X-Internal-Key` | JWT + `EnterpriseAdminGuard` |
+ * | 鉴权 | RS256 服务凭据 | JWT + `EnterpriseAdminGuard` |
  * | 能查谁 | **任意企业**（产品要服务多企业） | 只能查自己那一家 |
  *
  * 但**底下是同一条查询**（`queryEnterpriseMembers`），保证两边看到的成员集合与顺序一致。
@@ -43,7 +43,7 @@ const DEFAULT_LIMIT = 50;
  *
  * ## 安全约束
  *
- * - 走 `X-Internal-Key`，**必须由防火墙/nginx 保证不对公网暴露**
+ * - 走 **RS256 服务凭据**（`docs/27`），**必须由防火墙/nginx 保证不对公网暴露**
  * - **只返回查询参数指定的那一家企业**的账号，不存在"查全部"的分支
  * - 不返回余额、密码哈希、手机号以外的隐私字段
  *
@@ -57,7 +57,7 @@ const DEFAULT_LIMIT = 50;
  * 把账号返回给产品去"挑人"，只会让人挑完加进产品、结果对方登不进来。
  */
 @ApiTags('内网 · 企业成员 internal')
-@ApiSecurity('internal-key')
+@ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
 @Controller('internal/enterprise-accounts')
