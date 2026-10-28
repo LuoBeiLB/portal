@@ -126,7 +126,10 @@ export class ProductClient {
     const response = await firstValueFrom(
       this.http.get<ProductEnvelope<{ products: RemoteProduct[] }>>(url, {
         timeout: this.config.shop.productTimeoutMs,
-        headers: await this.serviceHeaders(endpoint),
+        headers: await this.serviceHeaders(endpoint, {
+          method: 'GET',
+          path: '/internal/products',
+        }),
       }),
     );
 
@@ -145,12 +148,26 @@ export class ProductClient {
     const endpoint = this.findByCode(productCode);
     const url = `${endpoint.baseUrl}/internal/provision`;
 
+    /*
+     * 自己序列化 body：`body_sha256` 必须对**实际发出去的字节**算。
+     * 交给 axios 内部序列化会拿不到那份文本（且不同版本空格处理可能不同）。
+     */
+    const bodyText = JSON.stringify(payload);
+
     let response;
     try {
       response = await firstValueFrom(
-        this.http.post<ProductEnvelope<ProvisionResult>>(url, payload, {
+        this.http.post<ProductEnvelope<ProvisionResult>>(url, bodyText, {
           timeout: this.config.shop.provisionTimeoutMs,
-          headers: await this.serviceHeaders(endpoint, payload),
+          headers: await this.serviceHeaders(endpoint, {
+            method: 'POST',
+            path: '/internal/provision',
+            bodyText,
+          }, {
+            /* 产品侧要求：provision 凭据里的 order_item_id 必须等于请求体里的 */
+            order_item_id: payload.order_item_id,
+            portal_user_id: payload.portal_user_id,
+          }),
         }),
       );
     } catch (error) {
@@ -192,12 +209,10 @@ export class ProductClient {
    */
   private async serviceHeaders(
     endpoint: ProductEndpoint,
-    payload?: ProvisionRequest,
+    binding: { method: string; path: string; query?: string; bodyText?: string },
+    extra?: Record<string, unknown>,
   ): Promise<Record<string, string>> {
-    const token = await this.serviceTokens.issue(endpoint.code, {
-      ...(payload?.order_item_id ? { order_item_id: payload.order_item_id } : {}),
-      ...(payload?.portal_user_id ? { portal_user_id: payload.portal_user_id } : {}),
-    });
+    const token = await this.serviceTokens.issue(endpoint.code, binding, extra);
     return {
       'content-type': 'application/json',
       authorization: `Bearer ${token}`,

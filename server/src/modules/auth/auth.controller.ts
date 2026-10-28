@@ -89,6 +89,12 @@ export class AuthController {
       'login',
       this.config.security.authRateLimit.windowSeconds,
       this.config.security.authRateLimit.max,
+      /*
+       * 按「账号 + IP」分桶：
+       * 产品侧是**服务端代理登录**，全部用户共用产品服务器那一个出口 IP。
+       * 只按 IP 计数会让整个产品每分钟只能登 10 个人（详见 auth-rate-limit.ts 注释）。
+       */
+      dto.username.trim().toLowerCase(),
     );
 
     const result = await this.auth.login(dto);

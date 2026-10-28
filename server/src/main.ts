@@ -25,7 +25,15 @@ async function bootstrap(): Promise<void> {
 
   // 契约 §0.1：用户浏览器访问 https://<公网IP>/api/*
   // 例外：契约 §1.5 的 JWKS 挂在 /.well-known/jwks.json（产品侧内网直连取公钥）
-  app.setGlobalPrefix('api', { exclude: ['.well-known/jwks.json'] });
+  app.setGlobalPrefix('api', {
+    /*
+     * JWKS 有两个入口：
+     *  - `/.well-known/jwks.json`        标准位置（不在 /api 下）
+     *  - `/api/.well-known/jwks.json`    别名，产品方按 /api 直觉拼接时能命中
+     * 两者都必须从全局前缀里排除，否则会被拼成 /api/.well-known 或 /api/api/...。
+     */
+    exclude: ['.well-known/jwks.json', 'api/.well-known/jwks.json'],
+  });
 
   app.use(cookieParser());
 

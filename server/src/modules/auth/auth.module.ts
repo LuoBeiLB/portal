@@ -9,6 +9,7 @@ import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
 import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwksAliasController } from './jwks-alias.controller';
 import { JwksController } from './jwks.controller';
 import { JwksService } from './jwks.service';
 import { PasswordService } from './password.service';
@@ -23,7 +24,7 @@ import { TokenService } from './token.service';
 @Module({
   // AuditModule 提供 AuditService（改密码要写审计日志）；它是全局模块，不引入循环依赖
   imports: [TypeOrmModule.forFeature([UserEntity, WalletEntity, EnterpriseEntity]), AuditModule, ServiceKeyModule],
-  controllers: [AuthController, JwksController],
+  controllers: [AuthController, JwksController, JwksAliasController],
   // RateLimiterService 由全局 RateLimiterModule 提供（公开接口也要限流）
   providers: [AuthService, PasswordService, TokenService, JwksService, AuthRateLimit],
   exports: [AuthService, TokenService, PasswordService],

@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import Redis from 'ioredis';
-import { createHash } from 'node:crypto';
+import { bodySha256, canonicalQuery, stripApiPrefix } from '../util/canonical.util';
 import { decode, verify as jwtVerify } from 'jsonwebtoken';
 
 import { REDIS_CLIENT } from '../redis/redis.constants';
@@ -166,8 +166,7 @@ function assertRequestBinding(payload: ServiceCredentialPayload, request: Reques
 
   /* htu 不含 /api 前缀：全局前缀由 main.ts 剥掉，这里用 originalUrl 手工去掉 */
   const path = (request.originalUrl || request.url || '').split('?')[0] ?? '';
-  const withoutPrefix = path.replace(/^\/api(?=\/)/, '');
-  if (payload.htu !== withoutPrefix) throw new BizException(ErrorCode.UNAUTHENTICATED);
+  if (payload.htu !== stripApiPrefix(path)) throw new BizException(ErrorCode.UNAUTHENTICATED);
 
   const expectedQs = canonicalQuery(request.originalUrl || request.url || '');
   if ((payload.qs ?? '') !== expectedQs) throw new BizException(ErrorCode.UNAUTHENTICATED);
@@ -183,22 +182,9 @@ function assertBodyHash(payload: ServiceCredentialPayload, request: Request): vo
     return;
   }
   if (!payload.body_sha256) throw new BizException(ErrorCode.UNAUTHENTICATED);
-  const actual = createHash('sha256').update(raw as Buffer).digest('hex');
-  if (actual !== payload.body_sha256) throw new BizException(ErrorCode.UNAUTHENTICATED);
+  if (bodySha256(raw as Buffer) !== payload.body_sha256) throw new BizException(ErrorCode.UNAUTHENTICATED);
 }
 
-/**
- * query 规范化（`docs/27` §3.3）：按 key 字典序、`encodeURIComponent`、`&` 连接。
- * 无 query 返回空串。
- */
-export function canonicalQuery(url: string): string {
-  const index = url.indexOf('?');
-  if (index < 0) return '';
-  const params = new URLSearchParams(url.slice(index + 1));
-  const entries = [...params.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  return entries
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
-}
-
+/* 规范化工具在 common/util/canonical.util.ts，守卫与签发共用同一套（docs/27 §3.3） */
+export { canonicalQuery } from '../util/canonical.util';
 export { CLOCK_SKEW_SECONDS, NONCE_TTL_SECONDS };
