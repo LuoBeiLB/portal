@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+import { EnterpriseStatus } from '../../enterprise/entities/enterprise.entity';
+
 /**
  * 账号池里的一个候选账号。
  *
@@ -75,4 +77,52 @@ export class InternalEnterpriseAccountListView {
 
   @ApiProperty({ description: '候选账号列表', type: [InternalEnterpriseAccountView] })
   list!: InternalEnterpriseAccountView[];
+}
+
+/**
+ * 企业清单里的一项（**只有元数据**）。
+ *
+ * 为什么不含成员：企业元数据的敏感度远低于个人信息，产品侧要按企业维度做运维/统计，
+ * 但"谁能看谁的电话"是另一件事 —— 那必须走 `enterprise-accounts` 且指定单家企业。
+ */
+export class InternalEnterpriseBriefView {
+  @ApiProperty({ description: '企业 id（用它去查成员）', example: '3' })
+  enterprise_id!: string;
+
+  @ApiProperty({ description: '企业编码', example: 'acme2026' })
+  code!: string;
+
+  @ApiProperty({ description: '企业名称', example: '某某科技有限公司' })
+  name!: string;
+
+  @ApiProperty({
+    description: '状态：`pending` 待审核 · `active` 正常 · `rejected` 已驳回 · `disabled` 已停用',
+    enum: Object.values(EnterpriseStatus),
+    example: EnterpriseStatus.ACTIVE,
+  })
+  status!: EnterpriseStatus;
+
+  @ApiProperty({ description: '成员数（含主管理员）', example: 14 })
+  member_count!: number;
+
+  @ApiProperty({ description: '服务到期时间（UTC ISO 8601），可空', type: String, nullable: true })
+  expire_at!: string | null;
+
+  @ApiProperty({ description: '创建时间（UTC ISO 8601）', example: '2026-10-27T02:00:00Z' })
+  created_at!: string;
+}
+
+/** 企业清单响应 data */
+export class InternalEnterpriseListListView {
+  @ApiProperty({ description: '符合条件的企业总数（不受 limit/offset 影响）', example: 37 })
+  total!: number;
+
+  @ApiProperty({ description: '本次返回条数（≤ limit）', example: 20 })
+  returned!: number;
+
+  @ApiProperty({ description: '本次跳过的条数（回显请求的 offset）', example: 0 })
+  offset!: number;
+
+  @ApiProperty({ description: '企业清单（仅元数据，不含成员）', type: [InternalEnterpriseBriefView] })
+  list!: InternalEnterpriseBriefView[];
 }

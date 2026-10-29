@@ -2010,6 +2010,85 @@
         ]
       }
     },
+    "/api/internal/enterprises": {
+      "get": {
+        "operationId": "InternalEnterpriseListController_list",
+        "summary": "企业清单（服务凭据）",
+        "description": "返回**企业元数据**列表，供平台管理员在产品后台里选择企业。\n\n- **不含成员信息**；查成员请用 `GET /api/internal/enterprise-accounts?enterprise_id=`\n- 鉴权：RS256 服务凭据。门户**无法区分**背后是哪个用户，所以「仅平台管理员可见」\n  需要产品侧按登录返回的 `role === 'admin'` 自己控制\n- 按创建时间倒序：新企业在前；`offset + returned < total` 时还有下一页\n- 只返回 `pending`/`rejected`/`disabled` 的企业也可查（默认不过滤状态），便于运营排查",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "按状态筛选；不传返回全部状态",
+            "schema": {
+              "example": "active",
+              "enum": [
+                "pending",
+                "active",
+                "rejected",
+                "disabled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "按企业编码或名称模糊搜索",
+            "schema": {
+              "example": "acme",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页条数，默认 50、上限 200",
+            "schema": {
+              "maximum": 200,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "跳过多少条；`offset + returned < total` 时还有下一页",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "example": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "企业清单（仅元数据）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalEnterpriseListListView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "内网 · 企业清单 internal"
+        ],
+        "security": [
+          {
+            "service-bearer": []
+          }
+        ]
+      }
+    },
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
@@ -4708,6 +4787,94 @@
         },
         "required": [
           "enterprise_id",
+          "total",
+          "returned",
+          "offset",
+          "list"
+        ]
+      },
+      "InternalEnterpriseBriefView": {
+        "type": "object",
+        "properties": {
+          "enterprise_id": {
+            "type": "string",
+            "description": "企业 id（用它去查成员）",
+            "example": "3"
+          },
+          "code": {
+            "type": "string",
+            "description": "企业编码",
+            "example": "acme2026"
+          },
+          "name": {
+            "type": "string",
+            "description": "企业名称",
+            "example": "某某科技有限公司"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态：`pending` 待审核 · `active` 正常 · `rejected` 已驳回 · `disabled` 已停用",
+            "enum": [
+              "pending",
+              "active",
+              "rejected",
+              "disabled"
+            ],
+            "example": "active"
+          },
+          "member_count": {
+            "type": "number",
+            "description": "成员数（含主管理员）",
+            "example": 14
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "服务到期时间（UTC ISO 8601），可空",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-27T02:00:00Z"
+          }
+        },
+        "required": [
+          "enterprise_id",
+          "code",
+          "name",
+          "status",
+          "member_count",
+          "expire_at",
+          "created_at"
+        ]
+      },
+      "InternalEnterpriseListListView": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "符合条件的企业总数（不受 limit/offset 影响）",
+            "example": 37
+          },
+          "returned": {
+            "type": "number",
+            "description": "本次返回条数（≤ limit）",
+            "example": 20
+          },
+          "offset": {
+            "type": "number",
+            "description": "本次跳过的条数（回显请求的 offset）",
+            "example": 0
+          },
+          "list": {
+            "description": "企业清单（仅元数据，不含成员）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalEnterpriseBriefView"
+            }
+          }
+        },
+        "required": [
           "total",
           "returned",
           "offset",

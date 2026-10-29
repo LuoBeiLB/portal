@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { EnterpriseStatus } from '../../enterprise/entities/enterprise.entity';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 /**
  * 产品侧拉取某企业的账号池（`GET /api/internal/enterprise-accounts`）。
@@ -51,6 +53,48 @@ export class InternalEnterpriseAccountQueryDto {
     default: 0,
     minimum: 0,
   })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
+/**
+ * 企业清单查询（`GET /api/internal/enterprises`）。
+ *
+ * 存在的理由：`/api/internal/enterprise-accounts` **强制要求 enterprise_id**，
+ * 所以"平台管理员在产品后台里先看到企业列表、再点进某家看成员"这个流程缺了第一步。
+ * 这个接口补的正是第一步。
+ *
+ * ⚠️ **只返回企业元数据**（编码/名称/状态/人数/到期），不含任何成员的个人信息。
+ * 成员仍要走 `enterprise-accounts`，且必须指定单家企业。
+ */
+export class InternalEnterpriseListQueryDto {
+  @ApiPropertyOptional({
+    description: '按状态筛选；不传返回全部状态',
+    enum: Object.values(EnterpriseStatus),
+    example: EnterpriseStatus.ACTIVE,
+  })
+  @IsOptional()
+  @IsIn(Object.values(EnterpriseStatus))
+  status?: EnterpriseStatus;
+
+  @ApiPropertyOptional({ description: '按企业编码或名称模糊搜索', example: 'acme' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  keyword?: string;
+
+  @ApiPropertyOptional({ description: '每页条数，默认 50、上限 200', example: 50, default: 50, maximum: 200 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: '跳过多少条；`offset + returned < total` 时还有下一页', example: 0, default: 0, minimum: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

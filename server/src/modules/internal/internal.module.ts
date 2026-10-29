@@ -7,6 +7,7 @@ import { UserEntity } from '../user/entities/user.entity';
 import { ServiceKeyModule } from '../service-key/service-key.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { InternalEnterpriseAccountController } from './internal-enterprise.controller';
+import { InternalEnterpriseListController } from './internal-enterprise-list.controller';
 import { InternalWalletController } from './internal-wallet.controller';
 
 /**
@@ -20,7 +21,11 @@ import { InternalWalletController } from './internal-wallet.controller';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([UserEntity, EnterpriseEntity]), WalletModule, ServiceKeyModule],
-  controllers: [InternalWalletController, InternalEnterpriseAccountController],
+  controllers: [
+    InternalWalletController,
+    InternalEnterpriseAccountController,
+    InternalEnterpriseListController,
+  ],
   providers: [InternalServiceAuthGuard],
 })
 export class InternalModule {}
