@@ -71,7 +71,19 @@ export class OrderService {
   ) {}
 
   /** 契约 §2.2 创建订单：价格一律后端按当前 p_product 重算，**不信任前端传入价格** */
-  async create(userId: string, dto: CreateOrderDto): Promise<OrderView> {
+  /**
+   * 创建订单。
+   *
+   * @param opts.serviceOrder 服务端下单（产品 → 门户）时传入：
+   *   - `clientOrderKey` 产品侧单号，写进唯一索引，重试不会产生第二个订单
+   *   - `maxTotalCents` 单笔上限，**在这里校验**而不是在 controller ——
+   *     总价由本方法按 `p_product` 重算，外面的预估值不可信
+   */
+  async create(
+    userId: string,
+    dto: CreateOrderDto,
+    opts: { clientOrderKey?: string; maxTotalCents?: number } = {},
+  ): Promise<OrderView> {
     const inputs = dto.items;
     if (inputs.length === 0) throw new BizException(ErrorCode.PARAM_INVALID, 'items 不能为空');
     if (inputs.length > this.config.shop.maxItemsPerOrder) {
@@ -104,6 +116,14 @@ export class OrderService {
       0,
     );
 
+    /* 金额上限：服务端下单时由配置强制，映射表写错一个 id 时这决定最坏损失 */
+    if (opts.maxTotalCents !== undefined && opts.maxTotalCents > 0 && totalCents > opts.maxTotalCents) {
+      throw new BizException(
+        ErrorCode.FORBIDDEN,
+        `订单金额 ${totalCents} 分超过服务端下单上限 ${opts.maxTotalCents} 分`,
+      );
+    }
+
     const orderNo = generateOrderNo();
 
     return this.dataSource.transaction(async (manager) => {
@@ -111,6 +131,7 @@ export class OrderService {
         manager.create(OrderEntity, {
           orderNo,
           userId,
+          clientOrderKey: opts.clientOrderKey ?? null,
           totalCents: String(totalCents),
           status: OrderStatus.PENDING,
         }),

@@ -2089,6 +2089,44 @@
         ]
       }
     },
+    "/api/internal/orders": {
+      "post": {
+        "operationId": "InternalOrderController_create",
+        "summary": "服务端下单并支付（服务凭据）",
+        "description": "用产品服务凭据替指定用户下单，**一步完成下单 + 扣款 + 入队开通**。\n\n四条硬性护栏：\n1. 产品必须在 `SERVER_ORDER_PRODUCTS` 白名单里（默认全禁）\n2. 每一项的 `product_code` 必须等于凭据的 `iss`（只能买自己的商品）\n3. 单笔上限 `SERVER_ORDER_MAX_CENTS` + 日累计上限 `SERVER_ORDER_DAILY_MAX_CENTS`\n4. `client_order_key` 唯一索引：重复提交返回首次结果，`duplicated=true`\n\n返回后 `processing_items > 0` 表示开通在进行中（通常 3 秒内），\n需用 `GET /api/internal/orders/{order_id}` 轮询（该接口见 docs/30，当前仅支持下单）。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalCreateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "下单结果（含幂等标记）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalCreateOrderView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "内网 · 服务端下单 internal"
+        ],
+        "security": [
+          {
+            "service-bearer": []
+          }
+        ]
+      }
+    },
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
@@ -4879,6 +4917,113 @@
           "returned",
           "offset",
           "list"
+        ]
+      },
+      "InternalOrderItemDto": {
+        "type": "object",
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "description": "商品 code。**必须等于你的产品 code**（门户强制校验，否则 1004）",
+            "example": "phone"
+          },
+          "sku_id": {
+            "type": "string",
+            "description": "SKU id（从 `GET /internal/products` 拿）",
+            "example": "phone-1c2g"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "数量，默认 1（上限按产品配置）",
+            "example": 1,
+            "default": 1
+          }
+        },
+        "required": [
+          "product_code",
+          "sku_id"
+        ]
+      },
+      "InternalCreateOrderDto": {
+        "type": "object",
+        "properties": {
+          "portal_user_id": {
+            "type": "string",
+            "description": "**门户**用户 id（你的映射表里那个），不是你自己系统的用户 id",
+            "example": "01a1b2c3-d4e5-6f70-8192-a3b4c5d6e7f8"
+          },
+          "client_order_key": {
+            "type": "string",
+            "description": "产品侧单号，**幂等键**。同一个 key 重复提交只会产生一个订单，第二次返回首次结果（`duplicated=true`）。\n\n建议格式：`<产品前缀>-<业务主键>`，如 `PH-20261028-0001`。",
+            "example": "PH-20261028-0001",
+            "maxLength": 64
+          },
+          "items": {
+            "description": "购买项。每一项的 `product_code` 必须等于你的产品 code",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalOrderItemDto"
+            }
+          },
+          "consent_ref": {
+            "type": "string",
+            "description": "**推荐的留痕字段**：用户在产品内点击\"购买\"时产生的确认号（订单预览页的幂等号）。\n门户会记进审计日志。不传也能下单，但出争议时你拿不出\"用户点过\"的证据。",
+            "example": "consent-01HQ2X"
+          }
+        },
+        "required": [
+          "portal_user_id",
+          "client_order_key",
+          "items"
+        ]
+      },
+      "InternalCreateOrderView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "门户订单 id（下钻/查询用）",
+            "example": "281"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "门户订单号（给用户看的）",
+            "example": "O20261028-000123"
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功（**已扣款、正在开通**）· `2` 全部成功 · `3` 全部失败",
+            "example": 1
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额（分），由门户按当前商品价重算",
+            "example": 80
+          },
+          "accepted_items": {
+            "type": "number",
+            "description": "本次受理的项数（已扣款）",
+            "example": 1
+          },
+          "processing_items": {
+            "type": "number",
+            "description": "仍在开通队列里的项数。**>0 表示还要轮询订单详情**，通常 3 秒内完成",
+            "example": 1
+          },
+          "duplicated": {
+            "type": "boolean",
+            "description": "是否为幂等重复：`true` 表示这个 `client_order_key` 之前已经成功下过单，本次没有新建订单、也没有再扣款，返回的是首次结果",
+            "example": false
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "status",
+          "total_cents",
+          "accepted_items",
+          "processing_items",
+          "duplicated"
         ]
       },
       "ProductView": {

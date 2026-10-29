@@ -5,8 +5,12 @@ import { InternalServiceAuthGuard } from '../../common/auth/internal-service-aut
 import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
 import { UserEntity } from '../user/entities/user.entity';
 import { ServiceKeyModule } from '../service-key/service-key.module';
+import { OrderEntity } from '../order/entities/order.entity';
+import { OrderModule } from '../order/order.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { InternalEnterpriseAccountController } from './internal-enterprise.controller';
+import { InternalOrderController } from './internal-order.controller';
+import { InternalOrderService } from './internal-order.service';
 import { InternalEnterpriseListController } from './internal-enterprise-list.controller';
 import { InternalWalletController } from './internal-wallet.controller';
 
@@ -20,12 +24,19 @@ import { InternalWalletController } from './internal-wallet.controller';
  * （`docs/24` §1.2）。它需要 `EnterpriseEntity` 仓储来校验企业是否 active。
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity, EnterpriseEntity]), WalletModule, ServiceKeyModule],
+  imports: [
+    TypeOrmModule.forFeature([UserEntity, EnterpriseEntity, OrderEntity]),
+    WalletModule,
+    ServiceKeyModule,
+    /* 服务端下单要复用 OrderService.create/pay，不能把下单逻辑复制一份 */
+    OrderModule,
+  ],
   controllers: [
     InternalWalletController,
     InternalEnterpriseAccountController,
     InternalEnterpriseListController,
+    InternalOrderController,
   ],
-  providers: [InternalServiceAuthGuard],
+  providers: [InternalOrderService, InternalServiceAuthGuard],
 })
 export class InternalModule {}

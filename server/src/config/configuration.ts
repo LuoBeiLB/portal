@@ -118,6 +118,12 @@ export interface ShopConfig {
   provisionBatchSize: number;
   /** 开通任务失败后的最大尝试次数（含首次）；用尽后置为 failed，人工/对账介入 */
   provisionMaxAttempts: number;
+  /** 允许"服务端下单"的产品 code 白名单；空数组 = 全部禁止 */
+  serverOrderProducts: string[];
+  /** 服务端下单单笔上限（分）；0 = 不限制 */
+  serverOrderMaxCents: number;
+  /** 服务端下单日累计上限（分），按"用户 + 自然日"计 */
+  serverOrderDailyMaxCents: number;
   /** 认领中的任务超过该毫秒数视为「卡死」，可被重新认领（进程中途被杀的保护） */
   provisionStaleMs: number;
 }
@@ -285,6 +291,21 @@ export function loadConfig(): PortalConfig {
       productTimeoutMs: int(process.env.PRODUCT_TIMEOUT_MS, 10_000),
       provisionBatchSize: int(process.env.PROVISION_BATCH_SIZE, 20),
       provisionMaxAttempts: int(process.env.PROVISION_MAX_ATTEMPTS, 3),
+      /**
+       * 服务端下单白名单（产品 → 门户：`POST /api/internal/orders`）。
+       *
+       * **默认空数组 = 全部禁止**。这是有意的：这个接口让产品能直接扣用户钱包的钱、
+       * 触发开通和退款，属于「钱」的能力，必须逐产品显式开口子。
+       * 例：`SERVER_ORDER_PRODUCTS=phone`
+       */
+      serverOrderProducts: (process.env.SERVER_ORDER_PRODUCTS ?? '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      /** 服务端下单单笔上限（分）。映射表写错一个 id 时，这决定最坏损失 */
+      serverOrderMaxCents: int(process.env.SERVER_ORDER_MAX_CENTS, 10_000),
+      /** 服务端下单日累计上限（分），按「用户 + 自然日」统计，防重试风暴刷空钱包 */
+      serverOrderDailyMaxCents: int(process.env.SERVER_ORDER_DAILY_MAX_CENTS, 50_000),
       provisionStaleMs: int(process.env.PROVISION_STALE_MS, 5 * 60 * 1000),
     },
     wallet: {
