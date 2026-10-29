@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 
 import { PortalConfigService } from '../../config/portal-config.service';
+import { OrderItemEntity } from '../order/entities/order-item.entity';
 import { OrderEntity } from '../order/entities/order.entity';
 import { OrderService } from '../order/order.service';
 import { UserEntity } from '../user/entities/user.entity';
@@ -19,6 +20,8 @@ type Options = {
   dailyMaxCents?: number;
   dailyUsed?: string;
   existing?: Partial<OrderEntity> | null;
+  items?: Array<Partial<OrderItemEntity>>;
+  detailOrder?: Partial<OrderEntity> | null;
   user?: Partial<UserEntity> | null;
 };
 
@@ -36,6 +39,9 @@ function make(options: Options = {}) {
     findOne: jest
       .fn()
       .mockResolvedValue(options.user === null ? null : { id: 'u1', role: 'user', ...(options.user ?? {}) }),
+  };
+  const orderItems = {
+    find: jest.fn().mockResolvedValue(options.items ?? []),
   };
   const orderService = {
     create: jest.fn().mockResolvedValue({ order_id: '281', total_cents: 80 }),
@@ -60,10 +66,11 @@ function make(options: Options = {}) {
   const service = new InternalOrderService(
     orders as unknown as Repository<OrderEntity>,
     users as unknown as Repository<UserEntity>,
+    orderItems as unknown as Repository<OrderItemEntity>,
     orderService as unknown as OrderService,
     config,
   );
-  return { service, orders, users, orderService };
+  return { service, orders, users, orderItems, orderService };
 }
 
 const phone = { code: 'phone', kid: 'phone-2026-10' } as never;
@@ -142,5 +149,83 @@ describe('InternalOrderService（服务端下单护栏）', () => {
       processing_items: 1,
       duplicated: false,
     });
+  });
+});
+
+/**
+ * 查询开通结果（产品轮询）。核心是两条过滤：**只返回本产品的项**、
+ * 一项都不属于本产品时当订单不存在（不泄露"用户买没买别家"）。
+ */
+describe('InternalOrderService.detail（查开通结果）', () => {
+  const orderRow = {
+    id: '281',
+    orderNo: 'O20261028-000123',
+    userId: 'u1',
+    clientOrderKey: 'PH-20261028-0001',
+    totalCents: '80',
+    status: 1,
+    createdAt: new Date('2026-10-28T07:31:09.123Z'),
+    paidAt: new Date('2026-10-28T07:31:10.456Z'),
+  };
+  const item = (over: Record<string, unknown> = {}) => ({
+    id: '512',
+    skuId: 'phone-1c2g',
+    quantity: 1,
+    priceCents: '80',
+    status: 1,
+    instanceId: null,
+    expireAt: null,
+    failReason: null,
+    ...over,
+  });
+
+  it('只查本产品的项，且时间精确到秒、未开通时 instance_id 为 null', async () => {
+    const { service, orders, orderItems } = make({ items: [item()] });
+    orders.findOne.mockResolvedValue(orderRow);
+
+    const result = await service.detail(phone, '281');
+
+    expect(orderItems.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { orderId: '281', productCode: 'phone' } }),
+    );
+    expect(result.returned).toBe(1);
+    expect(result.provision_done).toBe(false); // status=1 还要等
+    expect(result.items[0]).toMatchObject({ status: 1, instance_id: null, expire_at: null });
+    expect(result.created_at).toBe('2026-10-28T07:31:09Z');
+    expect(result.paid_at).toBe('2026-10-28T07:31:10Z');
+  });
+
+  it('全部项进入终态 → provision_done=true（不必再轮询）', async () => {
+    const { service, orders } = make({
+      items: [
+        item({ id: '512', status: 2, instanceId: 'i-1', expireAt: new Date('2026-11-28T00:00:00.000Z') }),
+        item({ id: '513', status: 4, failReason: '余额不足' }),
+      ],
+    });
+    orders.findOne.mockResolvedValue(orderRow);
+
+    const result = await service.detail(phone, '281');
+    expect(result.provision_done).toBe(true);
+    expect(result.items.map((x) => x.status)).toEqual([2, 4]);
+    expect(result.items[0].expire_at).toBe('2026-11-28T00:00:00Z');
+    expect(result.items[1].fail_reason).toBe('余额不足');
+  });
+
+  it('订单里没有本产品的项 → 4003（不暴露他人订单）', async () => {
+    const { service, orders } = make({ items: [] });
+    orders.findOne.mockResolvedValue(orderRow);
+    await expect(service.detail(phone, '281')).rejects.toThrow();
+  });
+
+  it('order_id 不是数字 → 直接 4003，不查库', async () => {
+    const { service, orders } = make();
+    await expect(service.detail(phone, '281abc')).rejects.toThrow();
+    expect(orders.findOne).not.toHaveBeenCalled();
+  });
+
+  it('订单不存在 → 4003', async () => {
+    const { service, orders } = make();
+    orders.findOne.mockResolvedValue(null);
+    await expect(service.detail(phone, '999999')).rejects.toThrow();
   });
 });

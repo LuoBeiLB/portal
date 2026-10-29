@@ -2127,6 +2127,43 @@
         ]
       }
     },
+    "/api/internal/orders/{orderId}": {
+      "get": {
+        "operationId": "InternalOrderController_detail",
+        "summary": "查询订单开通结果（服务凭据）",
+        "description": "下单后轮询用。**只返回本产品自己的订单项** —— 一个订单可能含多个产品的商品，\n产品 A 看不到产品 B 的商品与实例 id。\n\n- `provision_done=true` 表示开通已全部结束（成功/失败/已退款），**不必再轮询**\n- 订单里没有本产品的项，一律返回 `4001`（不暴露\"这个用户买没买别家\"）\n- 只读接口，**不校验** `SERVER_ORDER_PRODUCTS` 白名单（白名单管的是花钱，不是查询）\n- 建议轮询间隔 3 秒、最多 60 秒；超时后按 `fail_reason` 处理",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "订单开通结果（仅本产品的项）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalOrderDetailView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "内网 · 服务端下单 internal"
+        ],
+        "security": [
+          {
+            "service-bearer": []
+          }
+        ]
+      }
+    },
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
@@ -5024,6 +5061,139 @@
           "accepted_items",
           "processing_items",
           "duplicated"
+        ]
+      },
+      "InternalOrderItemView": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "description": "订单项 id",
+            "example": "512"
+          },
+          "sku_id": {
+            "type": "string",
+            "description": "SKU id",
+            "example": "phone-1c2g"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "数量",
+            "example": 1
+          },
+          "price_cents": {
+            "type": "number",
+            "description": "单价快照（分）",
+            "example": 80
+          },
+          "status": {
+            "type": "number",
+            "description": "开通状态：`0` 待支付 · `1` 已支付待开通 · `2` **已开通** · `3` 开通失败待退款 · `4` 已退款",
+            "example": 2
+          },
+          "instance_id": {
+            "type": "string",
+            "description": "产品侧返回的实例 id；未开通时为 null",
+            "nullable": true,
+            "example": "i-phone-8f21"
+          },
+          "expire_at": {
+            "type": "string",
+            "description": "服务到期时间（UTC ISO 8601）；未开通时为 null",
+            "nullable": true,
+            "example": "2026-11-28T00:00:00Z"
+          },
+          "fail_reason": {
+            "type": "string",
+            "description": "失败原因（`status=3/4` 时有值）",
+            "nullable": true,
+            "example": "产品开通超时"
+          }
+        },
+        "required": [
+          "item_id",
+          "sku_id",
+          "quantity",
+          "price_cents",
+          "status",
+          "instance_id",
+          "expire_at",
+          "fail_reason"
+        ]
+      },
+      "InternalOrderDetailView": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "门户订单 id",
+            "example": "281"
+          },
+          "order_no": {
+            "type": "string",
+            "description": "门户订单号",
+            "example": "O20261028-000123"
+          },
+          "status": {
+            "type": "number",
+            "description": "订单状态：`0` 待支付 · `1` 部分成功 · `2` **全部成功** · `3` 全部失败",
+            "example": 2
+          },
+          "total_cents": {
+            "type": "number",
+            "description": "订单总额（分）",
+            "example": 80
+          },
+          "portal_user_id": {
+            "type": "string",
+            "description": "下单用户的门户 id",
+            "example": "01a1..."
+          },
+          "client_order_key": {
+            "type": "string",
+            "description": "产品侧单号；用户自助下单为 null",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "description": "创建时间（UTC ISO 8601）",
+            "example": "2026-10-28T07:31:09Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "description": "支付时间；未支付为 null",
+            "nullable": true
+          },
+          "provision_done": {
+            "type": "boolean",
+            "description": "开通是否**全部完成**（所有项都不再是 `0/1`）。`true` 时不必再轮询",
+            "example": true
+          },
+          "returned": {
+            "type": "number",
+            "description": "本次返回的项数（**只含本产品的项**）",
+            "example": 1
+          },
+          "items": {
+            "description": "开通结果（只含调用方产品自己的项，不会泄露订单里其他产品的商品）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalOrderItemView"
+            }
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "status",
+          "total_cents",
+          "portal_user_id",
+          "client_order_key",
+          "created_at",
+          "paid_at",
+          "provision_done",
+          "returned",
+          "items"
         ]
       },
       "ProductView": {

@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
@@ -7,6 +7,7 @@ import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
 import { Public } from '../../common/auth/public.decorator';
 import { InternalCreateOrderDto } from './dto/internal-order.dto';
+import { InternalOrderDetailView } from './dto/internal-order-detail.vo';
 import { InternalCreateOrderView } from './dto/internal-order.vo';
 import { InternalOrderService } from './internal-order.service';
 
@@ -49,5 +50,26 @@ export class InternalOrderController {
     @Body() dto: InternalCreateOrderDto,
   ): Promise<InternalCreateOrderView> {
     return this.service.purchase(product, dto);
+  }
+
+  @Get(':orderId')
+  @ApiOperation({
+    summary: '查询订单开通结果（服务凭据）',
+    description: [
+      '下单后轮询用。**只返回本产品自己的订单项** —— 一个订单可能含多个产品的商品，',
+      '产品 A 看不到产品 B 的商品与实例 id。',
+      '',
+      '- `provision_done=true` 表示开通已全部结束（成功/失败/已退款），**不必再轮询**',
+      '- 订单里没有本产品的项，一律返回 `4001`（不暴露"这个用户买没买别家"）',
+      '- 只读接口，**不校验** `SERVER_ORDER_PRODUCTS` 白名单（白名单管的是花钱，不是查询）',
+      '- 建议轮询间隔 3 秒、最多 60 秒；超时后按 `fail_reason` 处理',
+    ].join('\n'),
+  })
+  @ApiOkResponse({ type: InternalOrderDetailView, description: '订单开通结果（仅本产品的项）' })
+  async detail(
+    @CurrentInternalProduct() product: InternalProduct,
+    @Param('orderId') orderId: string,
+  ): Promise<InternalOrderDetailView> {
+    return this.service.detail(product, orderId);
   }
 }

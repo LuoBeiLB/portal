@@ -5,6 +5,7 @@ import { InternalServiceAuthGuard } from '../../common/auth/internal-service-aut
 import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
 import { UserEntity } from '../user/entities/user.entity';
 import { ServiceKeyModule } from '../service-key/service-key.module';
+import { OrderItemEntity } from '../order/entities/order-item.entity';
 import { OrderEntity } from '../order/entities/order.entity';
 import { OrderModule } from '../order/order.module';
 import { WalletModule } from '../wallet/wallet.module';
@@ -25,7 +26,7 @@ import { InternalWalletController } from './internal-wallet.controller';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, EnterpriseEntity, OrderEntity]),
+    TypeOrmModule.forFeature([UserEntity, EnterpriseEntity, OrderEntity, OrderItemEntity]),
     WalletModule,
     ServiceKeyModule,
     /* 服务端下单要复用 OrderService.create/pay，不能把下单逻辑复制一份 */

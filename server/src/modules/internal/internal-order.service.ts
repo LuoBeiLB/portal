@@ -5,11 +5,13 @@ import { Repository } from 'typeorm';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 import { PortalConfigService } from '../../config/portal-config.service';
+import { OrderItemEntity } from '../order/entities/order-item.entity';
 import { OrderEntity } from '../order/entities/order.entity';
 import { OrderService } from '../order/order.service';
 import { UserEntity } from '../user/entities/user.entity';
 import { InternalCreateOrderDto } from './dto/internal-order.dto';
 import { InternalCreateOrderView } from './dto/internal-order.vo';
+import { InternalOrderDetailView, InternalOrderItemView } from './dto/internal-order-detail.vo';
 
 /** 订单视图里我们需要的字段（避免把整个 OrderView 形状耦合进来） */
 type OrderLike = Record<string, unknown>;
@@ -44,6 +46,7 @@ export class InternalOrderService {
   constructor(
     @InjectRepository(OrderEntity) private readonly orders: Repository<OrderEntity>,
     @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
+    @InjectRepository(OrderItemEntity) private readonly orderItems: Repository<OrderItemEntity>,
     private readonly orderService: OrderService,
     private readonly config: PortalConfigService,
   ) {}
@@ -166,6 +169,62 @@ export class InternalOrderService {
     return Number.isFinite(cap) ? cap : 0;
   }
 
+  /**
+   * 查询订单开通结果（产品轮询用）。
+   *
+   * ## 两条过滤，缺一不可
+   *
+   * 1. **只返回本产品的项**：一个订单可能同时含多个产品的商品（用户在商城一次结算），
+   *    产品 A 不能看到产品 B 的商品和实例 id
+   * 2. **一项都不属于本产品 → 当订单不存在**（4001，不是 1004）：
+   *    否则产品能拿订单 id 探测"这个用户买没买别家的东西"
+   *
+   * ## 为什么读不校验白名单
+   *
+   * 白名单管的是"能不能替用户花钱"。读接口只读、且已按产品过滤，
+   * 关掉白名单后产品仍应能查历史订单结果（否则对账会断）。
+   */
+  async detail(product: InternalProduct, orderId: string): Promise<InternalOrderDetailView> {
+    if (!/^\d+$/.test(orderId)) {
+      throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+    }
+
+    const order = await this.orders.findOne({ where: { id: orderId } });
+    if (!order) throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+
+    const items = await this.orderItems.find({
+      where: { orderId, productCode: product.code },
+      order: { id: 'ASC' },
+    });
+    if (items.length === 0) throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+
+    const view: InternalOrderItemView[] = items.map((item) => ({
+      item_id: String(item.id),
+      sku_id: item.skuId,
+      quantity: item.quantity,
+      price_cents: Number(item.priceCents),
+      status: item.status,
+      instance_id: item.instanceId ?? null,
+      expire_at: item.expireAt ? toIsoSecond(item.expireAt) : null,
+      fail_reason: item.failReason ?? null,
+    }));
+
+    return {
+      order_id: String(order.id),
+      order_no: order.orderNo,
+      status: order.status,
+      total_cents: Number(order.totalCents),
+      portal_user_id: order.userId,
+      client_order_key: order.clientOrderKey ?? null,
+      created_at: toIsoSecond(order.createdAt),
+      paid_at: order.paidAt ? toIsoSecond(order.paidAt) : null,
+      /* 0 待支付 / 1 已支付待开通 还要等；2 已开通 / 3 待退款 / 4 已退款 都是终态 */
+      provision_done: view.every((item) => item.status >= 2),
+      returned: view.length,
+      items: view,
+    };
+  }
+
   private toView(order: OrderLike, duplicated: boolean): InternalCreateOrderView {
     const num = (value: unknown): number => Number(value ?? 0);
     return {
@@ -185,4 +244,9 @@ export class InternalOrderService {
       ?? (error as { driverError?: { code?: string } })?.driverError?.code;
     return code === 'ER_DUP_ENTRY';
   }
+}
+
+/** 去掉毫秒：契约里时间是 UTC ISO 8601 秒精度 */
+function toIsoSecond(value: Date): string {
+  return new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
