@@ -8,12 +8,14 @@ import { ServiceKeyModule } from '../service-key/service-key.module';
 import { OrderItemEntity } from '../order/entities/order-item.entity';
 import { OrderEntity } from '../order/entities/order.entity';
 import { OrderModule } from '../order/order.module';
+import { WalletEntity } from '../wallet/entities/wallet.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { InternalEnterpriseAccountController } from './internal-enterprise.controller';
 import { InternalOrderController } from './internal-order.controller';
 import { InternalOrderService } from './internal-order.service';
 import { InternalEnterpriseListController } from './internal-enterprise-list.controller';
 import { InternalWalletController } from './internal-wallet.controller';
+import { InternalWalletQueryController } from './internal-wallet-query.controller';
 
 /**
  * 内网接口模块（契约 §4 与 §5 的门户侧）。
@@ -26,7 +28,13 @@ import { InternalWalletController } from './internal-wallet.controller';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, EnterpriseEntity, OrderEntity, OrderItemEntity]),
+    TypeOrmModule.forFeature([
+      UserEntity,
+      EnterpriseEntity,
+      OrderEntity,
+      OrderItemEntity,
+      WalletEntity,
+    ]),
     WalletModule,
     ServiceKeyModule,
     /* 服务端下单要复用 OrderService.create/pay，不能把下单逻辑复制一份 */
@@ -37,6 +45,7 @@ import { InternalWalletController } from './internal-wallet.controller';
     InternalEnterpriseAccountController,
     InternalEnterpriseListController,
     InternalOrderController,
+    InternalWalletQueryController,
   ],
   providers: [InternalOrderService, InternalServiceAuthGuard],
 })

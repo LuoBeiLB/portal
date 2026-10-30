@@ -2164,6 +2164,45 @@
         ]
       }
     },
+    "/api/internal/wallet/balance": {
+      "get": {
+        "operationId": "InternalWalletQueryController_balance",
+        "summary": "查用户余额（服务凭据）",
+        "description": "产品在扣费前查询用户余额，用于提前提示充值。\n\n- **只读**：不会为用户创建钱包；从未有过资金往来的用户返回 `wallet_exists=false` + 余额 0\n- 金额单位是**分**，整数\n- `status=1` 表示钱包冻结，此时 `deduct` 会返回 `3002`\n- 余额为 0 不代表不能扣费成功——还需考虑并发扣款，最终以 `deduct` 的结果为准",
+        "parameters": [
+          {
+            "name": "portal_user_id",
+            "required": true,
+            "in": "query",
+            "description": "**门户**用户 id（UUID），不是产品自己的用户 id",
+            "schema": {
+              "example": "01a1b2c3-d4e5-6f70-8192-a3b4c5d6e7f8",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "余额与钱包状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalWalletBalanceView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "内网计费 internal"
+        ],
+        "security": [
+          {
+            "service-bearer": []
+          }
+        ]
+      }
+    },
     "/api/shop/products": {
       "get": {
         "operationId": "ShopController_products",
@@ -5194,6 +5233,37 @@
           "provision_done",
           "returned",
           "items"
+        ]
+      },
+      "InternalWalletBalanceView": {
+        "type": "object",
+        "properties": {
+          "portal_user_id": {
+            "type": "string",
+            "description": "门户用户 id（原样回显，便于产品对账）",
+            "example": "01a1b2c3-d4e5-6f70-8192-a3b4c5d6e7f8"
+          },
+          "balance_cents": {
+            "type": "number",
+            "description": "余额（**分**）。整数；不返回小数，避免浮点误差",
+            "example": 12345
+          },
+          "status": {
+            "type": "number",
+            "description": "钱包状态：`0` 正常 · `1` 冻结（冻结时不能扣费，`deduct` 会返回 `3002`）",
+            "example": 0
+          },
+          "wallet_exists": {
+            "type": "boolean",
+            "description": "是否已开通过钱包。`false` 表示该用户从未产生过资金往来，`balance_cents` 恒为 0。\n\n**本接口不会为查询创建钱包**——只读，不产生副作用",
+            "example": true
+          }
+        },
+        "required": [
+          "portal_user_id",
+          "balance_cents",
+          "status",
+          "wallet_exists"
         ]
       },
       "ProductView": {
