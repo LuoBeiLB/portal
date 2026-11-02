@@ -82,7 +82,7 @@ export class OrderService {
   async create(
     userId: string,
     dto: CreateOrderDto,
-    opts: { clientOrderKey?: string; maxTotalCents?: number } = {},
+    opts: { clientOrderKey?: string; maxTotalCents?: number; capNote?: string } = {},
   ): Promise<OrderView> {
     const inputs = dto.items;
     if (inputs.length === 0) throw new BizException(ErrorCode.PARAM_INVALID, 'items 不能为空');
@@ -120,7 +120,7 @@ export class OrderService {
     if (opts.maxTotalCents !== undefined && opts.maxTotalCents > 0 && totalCents > opts.maxTotalCents) {
       throw new BizException(
         ErrorCode.FORBIDDEN,
-        `订单金额 ${totalCents} 分超过服务端下单上限 ${opts.maxTotalCents} 分`,
+        `订单金额 ${totalCents} 分超过${opts.capNote ?? '服务端下单上限'} ${opts.maxTotalCents} 分`,
       );
     }
 

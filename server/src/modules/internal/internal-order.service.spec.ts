@@ -229,3 +229,47 @@ describe('InternalOrderService.detail（查开通结果）', () => {
     await expect(service.detail(phone, '999999')).rejects.toThrow();
   });
 });
+
+/**
+ * 额度判定的语义拆分（2026-11-02 修的 bug）。
+ *
+ * 旧实现里 `0` 既表示"不限制"（传给 create）又表示"额度用尽"（调用方判），
+ * 结果"两个上限都设 0"会被判成用尽 —— 与配置意图正好相反。
+ */
+describe('InternalOrderService（额度语义）', () => {
+  it('两个上限都设 0（都不限制）→ 正常下单，不再误判"额度用尽"', async () => {
+    const { service, orderService } = make({ maxCents: 0, dailyMaxCents: 0 });
+    const result = await service.purchase(phone, dto);
+
+    expect(result.duplicated).toBe(false);
+    expect(orderService.create).toHaveBeenCalledWith(
+      'u1',
+      expect.any(Object),
+      expect.objectContaining({ maxTotalCents: 0 }),
+    );
+    /* 无上限时不该有 capNote */
+    expect(orderService.create.mock.calls[0][2].capNote).toBeUndefined();
+  });
+
+  it('日额度用完 → 报错文案给出「今日已用 / 日上限」两个数', async () => {
+    const { service } = make({ dailyMaxCents: 5_000, dailyUsed: '5000' });
+    await expect(service.purchase(phone, dto)).rejects.toThrow(/今日已用 5000 分.*日上限 5000 分/);
+  });
+
+  it('卡住的是日剩余 → capNote 说明是"今日剩余额度"，不是单笔上限', async () => {
+    const { service, orderService } = make({ maxCents: 100_000, dailyMaxCents: 50_000, dailyUsed: '30_450'.replace('_', '') });
+    await service.purchase(phone, dto);
+    const opts = orderService.create.mock.calls[0][2];
+    expect(opts.maxTotalCents).toBe(19_550);
+    expect(opts.capNote).toContain('今日服务端下单剩余额度');
+    expect(opts.capNote).toContain('30450 分');
+  });
+
+  it('卡住的是单笔上限 → capNote 说明是"单笔上限"', async () => {
+    const { service, orderService } = make({ maxCents: 500, dailyMaxCents: 50_000, dailyUsed: '0' });
+    await service.purchase(phone, dto);
+    const opts = orderService.create.mock.calls[0][2];
+    expect(opts.maxTotalCents).toBe(500);
+    expect(opts.capNote).toContain('单笔上限');
+  });
+});

@@ -97,10 +97,13 @@ export class InternalOrderService {
       return this.toView(view, true);
     }
 
-    /* ⑤ 日累计上限：与单笔上限一起作用，防"重试风暴把钱包刷空" */
-    const cap = await this.resolveCap(user.id);
-    if (cap === 0) {
-      throw new BizException(ErrorCode.FORBIDDEN, '今日服务端下单额度已用尽');
+    /* ⑤ 额度判定：单笔上限与日累计上限一起作用，防"重试风暴把钱包刷空" */
+    const decision = await this.resolveCap(user.id);
+    if (decision.exhausted) {
+      throw new BizException(
+        ErrorCode.FORBIDDEN,
+        `今日服务端下单额度已用尽（今日已用 ${fmtCents(decision.usedToday)}，日上限 ${fmtCents(decision.dailyMax)}）`,
+      );
     }
 
     /* ⑥ 下单（总价由门户按 p_product 重算，上限在 create 内部校验） */
@@ -109,7 +112,11 @@ export class InternalOrderService {
       created = await this.orderService.create(
         user.id,
         { items: dto.items },
-        { clientOrderKey: dto.client_order_key, maxTotalCents: cap },
+        {
+          clientOrderKey: dto.client_order_key,
+          maxTotalCents: decision.maxTotalCents,
+          capNote: decision.capNote,
+        },
       );
     } catch (error) {
       /* 并发下两个请求同时过了 ④，唯一索引会让其中一个失败 —— 转成幂等返回 */
@@ -140,16 +147,40 @@ export class InternalOrderService {
   }
 
   /**
-   * 本次允许的金额上限（分）。`0` 表示今日额度已耗尽。
+  /**
+   * 额度决策。
    *
-   * 取「单笔上限」与「今日剩余额度」的较小者；配置为 0 表示不限制。
+   * ## 为什么不再返回一个 number
+   *
+   * 旧实现用 `0` 同时表达两件相反的事：
+   * - 透传给 `create()` 时，`0` = **不限制**
+   * - 调用方判 `cap === 0` 时，`0` = **额度用尽**
+   *
+   * 于是"两个上限都设 0（本意都不限制）"会算出 `Infinity` → 被兜底成 `0` →
+   * 直接报"额度已用尽"，与配置意图正好相反（2026-11-02 实测踩到）。
+   *
+   * 现在把三件事分开回答：还有没有额度、上限多少、是哪道门卡住的。
    */
-  private async resolveCap(userId: string): Promise<number> {
+  private async resolveCap(userId: string): Promise<{
+    /** 日额度已用完，直接拒绝（与"不限制"无关） */
+    exhausted: boolean;
+    /** 透传给 create 的金额上限；0 = 不限制 */
+    maxTotalCents: number;
+    /** 卡住的是哪道门，用于报错文案 */
+    binding: 'per_order' | 'daily' | 'none';
+    /** 报错文案里追加的说明（无上限时为 undefined） */
+    capNote?: string;
+    usedToday: number;
+    dailyMax: number;
+    perOrderMax: number;
+  }> {
     const shop = this.config.shop;
-    const perOrder = shop.serverOrderMaxCents > 0 ? shop.serverOrderMaxCents : Number.POSITIVE_INFINITY;
+    const perOrderMax = shop.serverOrderMaxCents; // 0 = 不限制
+    const dailyMax = shop.serverOrderDailyMaxCents; // 0 = 不限制
 
-    let daily = Number.POSITIVE_INFINITY;
-    if (shop.serverOrderDailyMaxCents > 0) {
+    let usedToday = 0;
+    let dailyRemaining = Number.POSITIVE_INFINITY;
+    if (dailyMax > 0) {
       const since = new Date();
       since.setHours(0, 0, 0, 0);
       const raw = await this.orders
@@ -159,14 +190,30 @@ export class InternalOrderService {
         .andWhere('o.clientOrderKey IS NOT NULL')
         .andWhere('o.createdAt >= :since', { since })
         .getRawOne<{ total: string | number }>();
-      const used = Number(raw?.total ?? 0);
-      daily = Math.max(0, shop.serverOrderDailyMaxCents - used);
+      usedToday = Number(raw?.total ?? 0);
+      dailyRemaining = Math.max(0, dailyMax - usedToday);
     }
 
-    const cap = Math.min(perOrder, daily);
-    /* create() 里 0 表示不限制，所以"额度耗尽"要单独表达 */
-    if (cap === 0) return 0;
-    return Number.isFinite(cap) ? cap : 0;
+    /* 日额度用完：明确拒绝，不说"超上限"（那是另一回事） */
+    if (dailyRemaining <= 0) {
+      return { exhausted: true, maxTotalCents: 0, binding: 'daily', usedToday, dailyMax, perOrderMax };
+    }
+
+    const perOrder = perOrderMax > 0 ? perOrderMax : Number.POSITIVE_INFINITY;
+    const cap = Math.min(perOrder, dailyRemaining);
+
+    /* 两道门都没设上限 —— 真的不限制，交给 create 时传 0 */
+    if (!Number.isFinite(cap)) {
+      return { exhausted: false, maxTotalCents: 0, binding: 'none', usedToday, dailyMax, perOrderMax };
+    }
+
+    const binding: 'per_order' | 'daily' = perOrder <= dailyRemaining ? 'per_order' : 'daily';
+    const capNote =
+      binding === 'daily'
+        ? `「今日服务端下单剩余额度」（今日已用 ${fmtCents(usedToday)} / 日上限 ${fmtCents(dailyMax)}）`
+        : '「服务端下单单笔上限」';
+
+    return { exhausted: false, maxTotalCents: cap, binding, capNote, usedToday, dailyMax, perOrderMax };
   }
 
   /**
@@ -249,4 +296,9 @@ export class InternalOrderService {
 /** 去掉毫秒：契约里时间是 UTC ISO 8601 秒精度 */
 function toIsoSecond(value: Date): string {
   return new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** 分 → 便于人读：`19900 分（199.00 元）` */
+function fmtCents(cents: number): string {
+  return `${cents} 分（${(cents / 100).toFixed(2)} 元）`;
 }
