@@ -67,7 +67,9 @@ describe('ProductScopeGuard（body 自报的 product_code 必须与密钥归属�
     }
   });
 
-  it('没挂 InternalKeyGuard（身份缺失）→ 直接报错，而不是静默放行', () => {
-    expect(() => guard.canActivate(contextOf({ body: { product_code: 'storage' } }))).toThrow(/InternalKeyGuard/);
+  it('没挂 InternalServiceAuthGuard（身份缺失）→ 直接报错，而不是静默放行', () => {
+    expect(() => guard.canActivate(contextOf({ body: { product_code: 'storage' } }))).toThrow(
+      /InternalServiceAuthGuard/,
+    );
   });
 });
