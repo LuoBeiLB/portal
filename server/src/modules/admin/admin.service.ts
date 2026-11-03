@@ -399,6 +399,58 @@ export class AdminService {
     return { ok: true, status: next, revoked_sessions: revoked };
   }
 
+  /**
+   * 平台管理员重置**普通用户**密码（2026-11-02 补）。
+   *
+   * ## 与另外两个改密接口的分工
+   *
+   * | 接口 | 谁用 | 目标 |
+   * |---|---|---|
+   * | `POST /api/auth/password` | 用户自己 | 改自己 |
+   * | `POST /api/admin/admins/:id/password` | 平台管理员 | 改**管理员** |
+   * | `POST /api/enterprise/users/:id/reset-password` | 企业管理员 | 改**本企业员工** |
+   * | **本方法** | 平台管理员 | 改**任意普通用户**（含不在任何企业的个人用户） |
+   *
+   * 补它的原因：个人用户（无企业归属）此前没有任何重置入口 —— 忘记密码只能找
+   * 企业管理员，而他没有企业。
+   *
+   * ## 三条行为约定
+   *
+   * 1. **置 `must_change_password = 1`**：管理员代设的密码必须由用户自己改掉，
+   *    与"企业管理员重置员工密码"一致
+   * 2. **吊销全部会话**：旧 refresh token 立即失效，防止原持有人继续使用
+   * 3. **不允许重置管理员**：管理员走 `/api/admin/admins/{id}/password`，
+   *    两个入口分开是为了审计时能区分"改了管理员"还是"改了普通用户"
+   */
+  async resetUserPassword(
+    actorId: string,
+    targetId: string,
+    newPassword: string,
+  ): Promise<{ ok: true; revoked_sessions: number }> {
+    const target = await this.users.findOne({ where: { id: targetId } });
+    if (!target) throw new BizException(ErrorCode.ORDER_NOT_FOUND, '用户不存在');
+
+    if (target.role === UserRole.ADMIN) {
+      throw new BizException(
+        ErrorCode.FORBIDDEN,
+        '该账号是管理员，请使用管理员管理接口（/api/admin/admins/{id}/password）',
+      );
+    }
+    if (targetId === actorId) {
+      throw new BizException(
+        ErrorCode.PARAM_INVALID,
+        '修改自己的密码请使用 POST /api/auth/password',
+      );
+    }
+
+    const passwordHash = await this.passwords.hash(newPassword);
+    // `updated_at` 交给库（ON UPDATE CURRENT_TIMESTAMP(3)）
+    await this.users.update({ id: targetId }, { passwordHash, mustChangePassword: 1 });
+    const revoked = await this.tokens.revokeAllSessions(targetId);
+
+    return { ok: true, revoked_sessions: revoked };
+  }
+
   /** 管理员重置**他人**密码；重置后强制对方重新登录 */
   async resetAdminPassword(
     actorId: string,

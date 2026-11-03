@@ -23,6 +23,8 @@ export enum AuditAction {
   ADMIN_ENABLE = 'admin_enable',
   /** 管理员重置他人密码 */
   ADMIN_PASSWORD_RESET = 'admin_password_reset',
+  /* 平台管理员重置**普通用户**密码（与 admin_password_reset 分开，审计时能区分对象类型） */
+  USER_PASSWORD_RESET = 'user_password_reset',
   /** 用户改自己的密码 */
   PASSWORD_CHANGE = 'password_change',
   /** 导出流水 CSV（数据外泄面，必须留痕） */

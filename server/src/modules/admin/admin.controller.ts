@@ -116,6 +116,39 @@ export class AdminPortalController {
   // ───────────────────────── 流水 ─────────────────────────
 
   @ApiOperation({
+    summary: '重置普通用户密码（管理端）',
+    description:
+      '平台管理员重置**任意普通用户**的密码 —— 补的是「个人用户忘记密码」这个缺口：\n' +
+      '他们没有企业管理员，此前没有任何重置入口。\n\n' +
+      '行为：置 `must_change_password = 1`（用户下次登录必须先改密）+ 吊销该用户全部会话。\n\n' +
+      '分工：改**管理员**密码用 `POST /api/admin/admins/{id}/password`；\n' +
+      '企业员工可由企业管理员用 `POST /api/enterprise/users/{id}/reset-password`。\n\n' +
+      '错误：`4001` 用户不存在 · `1004` 目标是管理员（请改用管理员接口）· `1001` 目标是自己。',
+  })
+  @HttpCode(200)
+  @ApiOkResponse({ description: '统一响应壳，data 含被吊销的会话数', type: CredentialResultView })
+  @Post('users/:id/password')
+  async resetUserPassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: ResetPasswordDto,
+    @Req() request: Request,
+  ): Promise<Record<string, unknown>> {
+    const result = await this.admin.resetUserPassword(user.id, id, body.new_password);
+
+    await this.audit.record({
+      operatorId: user.id,
+      operator: user.username,
+      action: AuditAction.USER_PASSWORD_RESET,
+      target: `user:${id}`,
+      detail: { revoked_sessions: result.revoked_sessions, must_change_password: 1 },
+      ip: this.audit.ipOf(request),
+    });
+
+    return { ...result };
+  }
+
+  @ApiOperation({
     summary: '交易流水列表（前端需求清单 P0）',
     description:
       '比用户端的流水接口多 `username` 与 `user_balance_cents`（便于核对）。\n\n' +
@@ -123,6 +156,7 @@ export class AdminPortalController {
       '`start_date` / `end_date`（**UTC 自然日，含当日**）过滤 —— 管理端最常用的"查某天的流水"。',
   })
   @ApiOkResponse({ description: '统一响应壳，data 为流水列表 + 分页', type: AdminTransactionListView })
+
   @Get('transactions')
   async listTransactions(@Query() query: AdminTransactionQueryDto): Promise<Record<string, unknown>> {
     return {

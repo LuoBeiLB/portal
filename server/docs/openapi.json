@@ -366,6 +366,53 @@
         ]
       }
     },
+    "/api/admin/users/{id}/password": {
+      "post": {
+        "operationId": "AdminPortalController_resetUserPassword",
+        "summary": "重置普通用户密码（管理端）",
+        "description": "平台管理员重置**任意普通用户**的密码 —— 补的是「个人用户忘记密码」这个缺口：\n他们没有企业管理员，此前没有任何重置入口。\n\n行为：置 `must_change_password = 1`（用户下次登录必须先改密）+ 吊销该用户全部会话。\n\n分工：改**管理员**密码用 `POST /api/admin/admins/{id}/password`；\n企业员工可由企业管理员用 `POST /api/enterprise/users/{id}/reset-password`。\n\n错误：`4001` 用户不存在 · `1004` 目标是管理员（请改用管理员接口）· `1001` 目标是自己。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "统一响应壳，data 含被吊销的会话数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResultView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "管理端 admin"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/admin/transactions": {
       "get": {
         "operationId": "AdminPortalController_listTransactions",
@@ -3123,6 +3170,19 @@
           "status"
         ]
       },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "description": "新密码：8-64 位，需同时包含字母和数字",
+            "example": "NewPortal2026"
+          }
+        },
+        "required": [
+          "new_password"
+        ]
+      },
       "AdminTransactionView": {
         "type": "object",
         "properties": {
@@ -3463,19 +3523,6 @@
         "required": [
           "id",
           "username"
-        ]
-      },
-      "ResetPasswordDto": {
-        "type": "object",
-        "properties": {
-          "new_password": {
-            "type": "string",
-            "description": "新密码：8-64 位，需同时包含字母和数字",
-            "example": "NewPortal2026"
-          }
-        },
-        "required": [
-          "new_password"
         ]
       },
       "EnterpriseView": {
