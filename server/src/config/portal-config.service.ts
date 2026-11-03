@@ -35,6 +35,11 @@ export class PortalConfigService {
     return this.config.security;
   }
 
+  /** 内网接口相关的开关（目前只有旧计费接口总闸） */
+  get internal() {
+    return { legacyWalletApiEnabled: this.config.security.legacyWalletApiEnabled };
+  }
+
   get shop() {
     return this.config.shop;
   }

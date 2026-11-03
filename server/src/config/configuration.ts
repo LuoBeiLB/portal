@@ -79,6 +79,13 @@ export interface JwtConfig {
 
 export interface SecurityConfig {
   /**
+   * 旧内网计费接口（/api/wallet/deduct、/api/wallet/refund）是否开放。
+   *
+   * **默认 false**：开通链路统一走 /api/internal/orders，双入口同时能扣钱会造成双轨记账。
+   * 见 `LegacyWalletApiGuard` 与 docs/30。
+   */
+  legacyWalletApiEnabled: boolean;
+  /**
    * 首个管理员的引导配置（环境变量，幂等）。
    *
    * 2026-10-10 起管理端改用**管理员账号**鉴权（原静态 `X-Admin-Key` 已废弃：
@@ -253,6 +260,9 @@ export function loadConfig(): PortalConfig {
       refreshTtlSeconds: int(process.env.JWT_REFRESH_TTL, 1209600),
     },
     security: {
+      /* 旧计费接口总闸：默认关，详见 LegacyWalletApiGuard 的注释 */
+      legacyWalletApiEnabled: bool(process.env.INTERNAL_LEGACY_WALLET_API, false),
+
       // 首个管理员：环境变量引导（幂等，每次启动校准密码）
       adminBootstrap: {
         username: (process.env.ADMIN_USERNAME ?? '').trim(),

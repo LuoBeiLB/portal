@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { DeductView, RefundView } from '../../common/dto/common.vo';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { LegacyWalletApiGuard } from '../../common/auth/legacy-wallet-api.guard';
 import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
@@ -28,7 +29,7 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
 @ApiTags('内网计费 internal')
 @ApiSecurity('service-bearer')
 @Public()
-@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@UseGuards(LegacyWalletApiGuard, InternalServiceAuthGuard, ProductScopeGuard)
 @AllowProducts(ANY_PRODUCT)
 @Controller('wallet')
 export class InternalWalletController {
@@ -40,6 +41,7 @@ export class InternalWalletController {
   /** §4.1 扣费。产品侧纪律：账单先落库（status=0）→ 调本接口 → code=0 改 status=1 */
   @ApiOperation({
     summary: '扣费（契约 §4.1）',
+    deprecated: true,
     description:
       '产品 → 门户。幂等键 bill_no：重复提交返回 code=3003，data 为首次结果（**视为成功**）。\n\n' +
       '错误：3001 余额不足（`data.balance` 带当前余额，**不重试**）、3002 钱包冻结（不重试）、1001 参数错误。\n\n' +
@@ -73,6 +75,7 @@ export class InternalWalletController {
   /** §4.2 退款。refund_bill_no 是幂等键；累计退款不得超过原单金额（3004） */
   @ApiOperation({
     summary: '退款（契约 §4.2）',
+    deprecated: true,
     description:
       '产品 → 门户。幂等键 refund_bill_no。退款退回**原扣费账单所属的钱包**，调用方无需传 userId。\n\n' +
       '错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。',

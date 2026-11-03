@@ -1912,6 +1912,7 @@
       "post": {
         "operationId": "InternalWalletController_deduct",
         "summary": "扣费（契约 §4.1）",
+        "deprecated": true,
         "description": "产品 → 门户。幂等键 bill_no：重复提交返回 code=3003，data 为首次结果（**视为成功**）。\n\n错误：3001 余额不足（`data.balance` 带当前余额，**不重试**）、3002 钱包冻结（不重试）、1001 参数错误。\n\n产品实现要点：账单先落库 → 调本接口 → code=0 改 status=1；网络超时/5xx 用**同一 bill_no** 退避重试（1s/5s/30s）。",
         "parameters": [],
         "requestBody": {
@@ -1950,6 +1951,7 @@
       "post": {
         "operationId": "InternalWalletController_refund",
         "summary": "退款（契约 §4.2）",
+        "deprecated": true,
         "description": "产品 → 门户。幂等键 refund_bill_no。退款退回**原扣费账单所属的钱包**，调用方无需传 userId。\n\n错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。",
         "parameters": [],
         "requestBody": {
