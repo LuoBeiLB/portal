@@ -1,3 +1,6 @@
+import { Reflector } from '@nestjs/core';
+
+import { ALLOW_PRODUCTS_KEY, ANY_PRODUCT } from './allow-products.decorator';
 import { ExecutionContext } from '@nestjs/common';
 import { generateKeyPairSync } from 'node:crypto';
 import { sign as jwtSign } from 'jsonwebtoken';
@@ -63,7 +66,14 @@ function harness(overrides: Partial<FakeRequest> = {}): Harness {
   } as unknown as ServiceKeyService;
 
   const redis = { set: jest.fn().mockResolvedValue('OK') };
-  const guard = new InternalServiceAuthGuard(serviceKeys, redis as never);
+  /*
+   * 假 Reflector：默认返回 ANY_PRODUCT —— 这批用例测的是**验签/时效/请求绑定/重放**，
+   * 接口级白名单另有独立用例（见文件末尾 describe）。
+   */
+  const allowAllReflector = {
+    getAllAndOverride: jest.fn().mockReturnValue([ANY_PRODUCT]),
+  } as unknown as Reflector;
+  const guard = new InternalServiceAuthGuard(serviceKeys, redis as never, allowAllReflector);
 
   const request: FakeRequest = {
     method: 'POST',
@@ -78,6 +88,12 @@ function harness(overrides: Partial<FakeRequest> = {}): Harness {
 function ctxOf(request: FakeRequest): ExecutionContext {
   return {
     switchToHttp: () => ({ getRequest: () => request }),
+    /*
+     * 真实的 ExecutionContext 一定有这两个方法（守卫要拿它们取 @AllowProducts 元数据）。
+     * 这里给空实现即可 —— 本文件的 reflector 是假的，固定返回 ANY_PRODUCT。
+     */
+    getHandler: () => ({} as never),
+    getClass: () => ({} as never),
   } as unknown as ExecutionContext;
 }
 

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -24,6 +25,7 @@ import { InternalOrderService } from './internal-order.service';
 @ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts(ANY_PRODUCT)
 @Controller('internal/orders')
 export class InternalOrderController {
   constructor(private readonly service: InternalOrderService) {}

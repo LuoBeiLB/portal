@@ -5,6 +5,7 @@ import { Request } from 'express';
 import { AdminGuard } from '../../common/auth/admin.guard';
 import { AuthUser, CurrentUser } from '../../common/auth/current-user.decorator';
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -96,6 +97,7 @@ export class AdminReconciliationController {
 @ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts(ANY_PRODUCT)
 @Controller('internal/reconciliation')
 export class InternalReconciliationController {
   constructor(private readonly reconciliation: ReconciliationService) {}

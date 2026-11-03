@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, Logger } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import Redis from 'ioredis';
 import { bodySha256, canonicalQuery, stripApiPrefix } from '../util/canonical.util';
@@ -8,6 +9,7 @@ import { REDIS_CLIENT } from '../redis/redis.constants';
 
 import { BizException, ErrorCode } from '../error/error-code';
 import { ServiceKeyService } from '../../modules/service-key/service-key.service';
+import { ALLOW_PRODUCTS_KEY, resolveEndpointAllowance } from './allow-products.decorator';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 
 /** 服务凭据的时钟容忍（秒）：允许对方时钟比门户快/慢这么多 */
@@ -61,6 +63,7 @@ export class InternalServiceAuthGuard implements CanActivate {
   constructor(
     private readonly serviceKeys: ServiceKeyService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -107,11 +110,36 @@ export class InternalServiceAuthGuard implements CanActivate {
 
     await this.assertNotReplayed(payload);
 
+    /*
+     * 第二道闸：**这个产品能不能调这个接口**。
+     *
+     * 验签只证明"是某个已登记的产品"，不代表它能调所有内网接口。
+     * 接口没声明 = 一律拒绝（fail-closed）：新加接口忘了挂 @AllowProducts 会立刻暴露，
+     * 而不是悄悄对三个产品全放开。
+     */
+    this.assertEndpointAllowed(context, key.ownerCode);
+
     request[INTERNAL_PRODUCT_KEY] = {
       code: key.ownerCode,
       keyId: key.kid,
     } satisfies InternalProduct;
     return true;
+  }
+
+  /**
+   * 接口级产品白名单判定。
+   *
+   * 取元数据的顺序是 **handler 覆盖 class**：允许在控制器上写默认策略，
+   * 再在个别方法上收窄（例如控制器给 `ANY_PRODUCT`，某个危险接口只给 `storage`）。
+   */
+  private assertEndpointAllowed(context: ExecutionContext, ownerCode: string): void {
+    const allowed = this.reflector.getAllAndOverride<string[]>(ALLOW_PRODUCTS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    const denied = resolveEndpointAllowance(allowed, ownerCode);
+    if (denied) throw new BizException(ErrorCode.FORBIDDEN, denied);
   }
 
   /**

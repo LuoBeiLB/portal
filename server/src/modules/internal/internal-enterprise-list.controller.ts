@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
 import { Public } from '../../common/auth/public.decorator';
 import { EnterpriseEntity } from '../enterprise/entities/enterprise.entity';
@@ -59,6 +60,7 @@ const MAX_LIMIT = 200;
 @ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts(ANY_PRODUCT)
 @Controller('internal/enterprises')
 export class InternalEnterpriseListController {
   constructor(

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
 import { Public } from '../../common/auth/public.decorator';
 import { BizException, ErrorCode } from '../../common/error/error-code';
@@ -38,6 +39,7 @@ import { InternalWalletBalanceView } from './dto/internal-wallet.vo';
 @ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts(ANY_PRODUCT)
 @Controller('internal/wallet')
 export class InternalWalletQueryController {
   constructor(

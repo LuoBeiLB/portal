@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { DeductView, RefundView } from '../../common/dto/common.vo';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
+import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -28,6 +29,7 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
 @ApiSecurity('service-bearer')
 @Public()
 @UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts(ANY_PRODUCT)
 @Controller('wallet')
 export class InternalWalletController {
   constructor(
