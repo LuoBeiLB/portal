@@ -1911,9 +1911,9 @@
     "/api/wallet/deduct": {
       "post": {
         "operationId": "InternalWalletController_deduct",
-        "summary": "扣费（契约 §4.1）",
+        "summary": "扣费（契约 §4.1）· 已停用",
         "deprecated": true,
-        "description": "产品 → 门户。幂等键 bill_no：重复提交返回 code=3003，data 为首次结果（**视为成功**）。\n\n错误：3001 余额不足（`data.balance` 带当前余额，**不重试**）、3002 钱包冻结（不重试）、1001 参数错误。\n\n产品实现要点：账单先落库 → 调本接口 → code=0 改 status=1；网络超时/5xx 用**同一 bill_no** 退避重试（1s/5s/30s）。",
+        "description": "⛔ **已停用（2026-11-03）**：产品的扣费与开通已统一走 `POST /api/internal/orders`（下单即扣款 + 入队开通，见 docs/30）。调用本接口一律返回 `1004 该接口已停用…`。\n\n⚠️ 下方描述仅为历史留存，**不要再据此接入**。若确有存量系统仍需调用，需由门户改代码放开 `@AllowProducts()`（不是配置项），并说明理由。\n\n---\n\n【历史说明】产品 → 门户。幂等键 bill_no：重复提交返回 code=3003，data 为首次结果（**视为成功**）。\n\n错误：3001 余额不足（`data.balance` 带当前余额，**不重试**）、3002 钱包冻结（不重试）、1001 参数错误。\n\n产品实现要点：账单先落库 → 调本接口 → code=0 改 status=1；网络超时/5xx 用**同一 bill_no** 退避重试（1s/5s/30s）。",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1950,9 +1950,9 @@
     "/api/wallet/refund": {
       "post": {
         "operationId": "InternalWalletController_refund",
-        "summary": "退款（契约 §4.2）",
+        "summary": "退款（契约 §4.2）· 已停用",
         "deprecated": true,
-        "description": "产品 → 门户。幂等键 refund_bill_no。退款退回**原扣费账单所属的钱包**，调用方无需传 userId。\n\n错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。",
+        "description": "⛔ **已停用（2026-11-03）**：开通失败时由门户**自动退款**，产品侧不再需要调用退款接口。调用本接口一律返回 `1004 该接口已停用…`。\n\n⚠️ 下方描述仅为历史留存，**不要再据此接入**。\n\n---\n\n【历史说明】产品 → 门户。幂等键 refund_bill_no。退款退回**原扣费账单所属的钱包**，调用方无需传 userId。\n\n错误：3005 原 bill_no 未入账、3004 累计退款超出原单可退余额（`data.refundable_cents` 给出剩余可退）。",
         "parameters": [],
         "requestBody": {
           "required": true,
