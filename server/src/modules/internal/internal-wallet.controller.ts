@@ -6,8 +6,7 @@ import { Repository } from 'typeorm';
 import { DeductView, RefundView } from '../../common/dto/common.vo';
 import { BizException, ErrorCode } from '../../common/error/error-code';
 import { InternalServiceAuthGuard } from '../../common/auth/internal-service-auth.guard';
-import { LegacyWalletApiGuard } from '../../common/auth/legacy-wallet-api.guard';
-import { ANY_PRODUCT, AllowProducts } from '../../common/auth/allow-products.decorator';
+import { AllowProducts } from '../../common/auth/allow-products.decorator';
 import { CurrentInternalProduct } from '../../common/auth/internal-product.decorator';
 import { InternalProduct } from '../../common/auth/internal-product.types';
 import { ProductScopeGuard } from '../../common/auth/product-scope.guard';
@@ -29,8 +28,8 @@ import { DeductDto, RefundDto } from './dto/internal.dto';
 @ApiTags('内网计费 internal')
 @ApiSecurity('service-bearer')
 @Public()
-@UseGuards(LegacyWalletApiGuard, InternalServiceAuthGuard, ProductScopeGuard)
-@AllowProducts(ANY_PRODUCT)
+@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)
+@AllowProducts()
 @Controller('wallet')
 export class InternalWalletController {
   constructor(

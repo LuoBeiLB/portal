@@ -13,9 +13,17 @@ import { ANY_PRODUCT, resolveEndpointAllowance } from './allow-products.decorato
  * 3. 否则必须命中列表
  */
 describe('resolveEndpointAllowance（内网接口的产品白名单）', () => {
-  it('未声明 → 拒绝（fail-closed），并明确提示要加 @AllowProducts', () => {
+  it('未声明（元数据不存在）→ 拒绝，提示要加 @AllowProducts', () => {
     expect(resolveEndpointAllowance(undefined, 'storage')).toMatch(/未声明/);
-    expect(resolveEndpointAllowance([], 'phone')).toMatch(/未声明/);
+    expect(resolveEndpointAllowance(null, 'phone')).toMatch(/未声明/);
+  });
+
+  it('空列表 = 显式停用 → 拒绝，但文案指向替代接口（不是"忘声明"）', () => {
+    const reason = resolveEndpointAllowance([], 'storage');
+    expect(reason).toMatch(/已停用/);
+    expect(reason).toMatch(/internal\/orders/);
+    /* 关键：不能和"未声明"混为一谈 —— 一个该改代码，一个该换接口 */
+    expect(reason).not.toMatch(/未声明/);
   });
 
   it('ANY_PRODUCT → 放行任何产品', () => {
