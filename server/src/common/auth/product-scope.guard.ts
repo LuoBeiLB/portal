@@ -5,7 +5,7 @@ import { BizException, ErrorCode } from '../error/error-code';
 import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types';
 
 /**
- * 产品身份范围校验 —— 必须挂在 `InternalKeyGuard` **之后**。
+ * 产品身份范围校验 —— 必须挂在 `InternalServiceAuthGuard` **之后**。
  *
  * 规则：如果请求体里自报了 `product_code`，它必须与密钥归属的产品一致，否则 1004。
  *
@@ -13,7 +13,10 @@ import { INTERNAL_PRODUCT_KEY, InternalProduct } from './internal-product.types'
  * 的扣费请求体里并没有它。与其要求各家改代码，不如让"密钥即身份"成为事实：
  * 不传 → 按密钥推定；传了 → 必须对，传错立刻报错（这能抓出真实 bug）。
  *
- * 用法：`@UseGuards(InternalKeyGuard, ProductScopeGuard)`
+ * 用法：`@UseGuards(InternalServiceAuthGuard, ProductScopeGuard)`
+ *
+ * 它**不是**身份来源：身份来自服务凭据验签（`iss` + `kid` 对应的公钥），
+ * 这里只做"请求里自报的 product_code 与凭据归属是否一致"的比对。
  */
 @Injectable()
 export class ProductScopeGuard implements CanActivate {
@@ -21,8 +24,8 @@ export class ProductScopeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & Record<string, unknown>>();
     const product = request[INTERNAL_PRODUCT_KEY] as InternalProduct | undefined;
     if (!product) {
-      // 顺序挂错（ProductScopeGuard 在 InternalKeyGuard 之前）会走到这里
-      throw new Error('ProductScopeGuard 必须挂在 InternalKeyGuard 之后');
+      // 顺序挂错（ProductScopeGuard 在 InternalServiceAuthGuard 之前）会走到这里
+      throw new Error('ProductScopeGuard 必须挂在 InternalServiceAuthGuard 之后');
     }
 
     const body = request.body as { product_code?: unknown } | undefined;

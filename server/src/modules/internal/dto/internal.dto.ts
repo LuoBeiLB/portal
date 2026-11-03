@@ -11,7 +11,7 @@ export class DeductDto {
   portal_user_id!: string;
 
   /**
-   * 契约 §4.1 列为必填，但**实际身份以密钥为准**（见 InternalKeyGuard / ProductScopeGuard）。
+   * 契约 §4.1 列为必填，但**实际身份以密钥为准**（见 InternalServiceAuthGuard / ProductScopeGuard）。
    *
    * 这里放宽为可选，是为了兼容两种接入方式：
    * - 不传 → 门户按密钥归属推定产品身份（推荐）；
