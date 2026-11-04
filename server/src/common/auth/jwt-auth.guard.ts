@@ -49,6 +49,10 @@ export class JwtAuthGuard implements CanActivate {
       mcp?: number;
       er?: number;
       exp?: number;
+      /* 签发时刻（秒）：老 token 没有 iam 时用它回退比较 */
+      iat?: number;
+      /* 签发时刻（毫秒）：与「用户级作废时刻」同精度比较，避免同秒歧义 */
+      iam?: number;
     };
     try {
       payload = await this.jwtService.verifyAsync<{
@@ -70,8 +74,22 @@ export class JwtAuthGuard implements CanActivate {
       throw new BizException(ErrorCode.UNAUTHENTICATED);
     }
 
-    if (await this.tokens.isAccessTokenRevoked(token)) {
-      throw new BizException(ErrorCode.UNAUTHENTICATED, 'token 已登出');
+    /*
+     * 两种失效机制一起判（一次 MGET）：
+     * ① 单 token 黑名单 —— 用户主动登出当前设备
+     * ② 用户级作废时刻 —— 重置密码 / 禁用 / 移出企业后，该用户已签发的 access token 全部作废
+     *
+     * ② 是"立即全设备下线"的关键：access token 无状态且服务端不存它，
+     * 只删 refresh 只能让它 2 小时后失效。
+     */
+    if (
+      await this.tokens.isAccessTokenRevoked(token, {
+        sub: payload.sub,
+        iat: payload.iat,
+        iam: payload.iam,
+      })
+    ) {
+      throw new BizException(ErrorCode.UNAUTHENTICATED, '会话已失效，请重新登录');
     }
 
     /* 账号性质：旧 token 没有 ut claim → 按个人用户处理（兼容增量上线） */

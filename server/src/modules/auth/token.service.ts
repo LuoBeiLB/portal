@@ -48,6 +48,16 @@ export interface AccessTokenPayload {
    * （移交、降权），否则最长 2 小时内会用到旧权限 —— 这个延迟与 `role` 的既有口径一致。
    */
   er?: number;
+
+  /**
+   * 毫秒级签发时刻（自定义 claim，2026-11-03 新增）。
+   *
+   * 标准 `iat` 只有秒精度。管理员重置密码时要在同一秒内区分"重置前签发"与"重置后签发"，
+   * 秒级做不到（只能二选一：漏杀旧会话，或误杀刚登录的新会话）。加毫秒后两者都精确。
+   *
+   * 老 token 没有这个 claim → 回退到秒级比较（见 `isAccessTokenRevoked`）。
+   */
+  iam?: number;
 }
 
 export interface AccessTokenIssued {
@@ -90,7 +100,22 @@ export class TokenService {
   ): Promise<AccessTokenIssued> {
     const expiresIn = this.config.jwt.accessTtlSeconds;
     // 只在有值时才写入可选 claim，避免 JWT 里出现一堆 null 字段
-    const claims: AccessTokenPayload = { sub: userId, uname: username, role, ut: extra?.userType ?? 0 };
+    const claims: AccessTokenPayload = {
+      sub: userId,
+      uname: username,
+      role,
+      ut: extra?.userType ?? 0,
+      /*
+       * 毫秒级签发时刻（自定义 claim）。
+       *
+       * 为什么不用标准 `iat`：它只有**秒**精度。管理员重置密码与用户在同一秒内签发 token 时，
+       * 秒级比较无法区分"重置前签发"与"重置后签发"，只能二选一：
+       * - 用 `<` → 同一秒的旧会话漏杀（管理员以为踢掉了，其实没有）
+       * - 用 `<=` → 同一秒内重新登录被误杀
+       * 加毫秒后两者都能精确判断（见 isAccessTokenRevoked）。
+       */
+      iam: Date.now(),
+    };
     if (extra?.enterpriseId) claims.ent = String(extra.enterpriseId);
     if (extra?.mustChangePassword) claims.mcp = 1;
     if (extra?.enterpriseRole === 0 || extra?.enterpriseRole === 1) claims.er = extra.enterpriseRole;
@@ -148,15 +173,88 @@ export class TokenService {
     await this.store.setJson(`revoked:${sha256Hex(rawToken)}`, true, ttl);
   }
 
-  async isAccessTokenRevoked(rawToken: string): Promise<boolean> {
-    return (await this.store.getJson<boolean>(`revoked:${sha256Hex(rawToken)}`)) === true;
+  /**
+   * 判断 access token 是否已失效（两种机制，一次 MGET 一起判）。
+   *
+   * ## ① 单 token 黑名单 `revoked:<sha256>`（登出当前设备）
+   *
+   * 精确吊销一张 token。只在"登出时手里正好有那张 token"才写得进去。
+   *
+   * ## ② 用户级作废时刻 `user:auth-invalid-before:<userId>`（重置密码 / 停用 / 移出企业）
+   *
+   * access token 是无状态的，服务端**没有存**它，所以"删除 access token"这个动作
+   * 没有对象。但"让某时刻之前签发的全部 token 失效"是可以做到的：
+   * 重置密码时写下一个秒级时间戳，之后每次校验比较 `iat`。
+   *
+   * 效果等价于"立即全设备下线"，成本却只有一个 key ——
+   * 不必给每个 token 建集合（Redis 集合成员没有独立 TTL，会无限膨胀）。
+   *
+   * ### 为什么用严格小于
+   *
+   * `iat` 是秒级，作废时刻也是秒级。用 `<=` 会把"同一秒内用新密码刚登录拿到的 token"
+   * 一起误杀；用 `<` 则放行它，而旧会话这一秒内拿不到新 token（refresh 已被删），
+   * 不存在安全缺口。
+   *
+   * @param rawToken 原始 JWT 字符串
+   * @param claims 已验签的 payload（需要 `sub` 与 `iat`）
+   */
+  async isAccessTokenRevoked(
+    rawToken: string,
+    claims: { sub?: string; iat?: number; iam?: number } = {},
+  ): Promise<boolean> {
+    const revokedKey = `revoked:${sha256Hex(rawToken)}`;
+    const userId = claims.sub ?? '';
+    const invalidBeforeKey = userId ? `user:auth-invalid-before:${userId}` : '';
+
+    const values = await this.store.getStrings(
+      invalidBeforeKey ? [revokedKey, invalidBeforeKey] : [revokedKey],
+    );
+
+    if (values[0] === 'true') return true;
+
+    const marker = invalidBeforeKey ? values[1] : null;
+    if (marker === null) return false;
+
+    const invalidBeforeMs = Number(marker);
+    if (!Number.isFinite(invalidBeforeMs)) return false;
+
+    /*
+     * 优先用毫秒 claim `iam`：精确到毫秒，不会出现"同一秒内分不出先后"。
+     *
+     * 老 token（改造前签发）没有 iam，回退到秒级：把 iat 视为该秒的起点，
+     * 只要作废时刻落在这一秒内就吊销 —— **宁可误杀一秒，不漏杀**。
+     * 漏杀的代价是"管理员以为踢下线了，其实没踢"，属于安全缺陷；
+     * 误杀的代价是用户点一次重新登录。
+     */
+    if (typeof claims.iam === 'number') {
+      return claims.iam < invalidBeforeMs;
+    }
+    if (claims.iat === undefined) return true;
+    return claims.iat * 1000 < invalidBeforeMs;
   }
 
   /**
-   * 吊销该用户全部 refresh 会话（登出、禁用账号、改密等场景）。
-   * access token 不做黑名单，2h 自然过期（契约 §1.4 明确）。
+   * 吊销该用户全部会话：删 refresh + **写下作废时刻让已签发的 access token 也立刻失效**。
+   *
+   * 2026-11-03 修：此前只删 refresh，已签发的 access token 还能用到自然过期（最长 2h），
+   * 表现为"管理员重置密码后，员工刷新页面仍然是登录状态"。见 `isAccessTokenRevoked` ②。
+   *
+   * 调用点：登出（单设备走 `revokeAccessToken`）、改密、禁用账号、重置密码、移出企业。
    */
   async revokeAllSessions(userId: string): Promise<number> {
+    /*
+     * 先写作废时刻，再删 refresh：
+     * 反过来会出现"refresh 已删、作废时刻没写上"的窗口（Redis 中途失败），
+     * 那时旧 access token 仍有效，等于吊销失败但不报错。
+     */
+    await this.store.setString(
+      `user:auth-invalid-before:${userId}`,
+      /* **毫秒**时间戳：与 token 里的 `iam` 同精度，避免同秒歧义 */
+      String(Date.now()),
+      /* TTL 必须覆盖"作废时刻之前签发、但还没过期"的最长 access token */
+      this.config.jwt.accessTtlSeconds + 60,
+    );
+
     const setKey = `refresh:user:${userId}`;
     const digests = await this.store.smembers(setKey);
     if (digests.length > 0) {

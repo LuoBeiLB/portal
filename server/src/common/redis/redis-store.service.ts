@@ -35,6 +35,35 @@ export class RedisStore {
     }
   }
 
+  /**
+   * 一次取多个 key 的原始字符串（`MGET`）。
+   *
+   * 为什么不用多次 `getJson`：鉴权热路径上要同时判「单个 token 是否被吊销」与
+   * 「该用户是否有作废时刻」，两次 GET 就是两次往返。合并成一次 MGET 省一次 RTT。
+   *
+   * 读路径约定同 `getJson`：**失败一律返回全 null（降级放行）**，不把门户打死。
+   */
+  async getStrings(keys: string[]): Promise<Array<string | null>> {
+    if (keys.length === 0) return [];
+    try {
+      const values = await this.redis.mget(...keys);
+      return values.map((value) => (value === undefined ? null : value));
+    } catch (error) {
+      this.logger.warn(`getStrings 失败 keys=${keys.join(',')}: ${(error as Error).message}`);
+      return keys.map(() => null);
+    }
+  }
+
+  /** 写原始字符串（写路径约定：失败抛错，调用方要知道"吊销没生效"） */
+  async setString(key: string, value: string, ttlSeconds: number): Promise<void> {
+    try {
+      await this.redis.set(key, value, 'EX', Math.max(1, ttlSeconds));
+    } catch (error) {
+      this.logger.error(`setString 失败 key=${key}: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
   async del(...keys: string[]): Promise<void> {
     if (keys.length === 0) return;
     try {
