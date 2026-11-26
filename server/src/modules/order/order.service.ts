@@ -96,9 +96,9 @@ export class OrderService {
       const quantity = input.quantity ?? 1;
       const maxQuantity =
         input.product_code === 'phone' ? this.config.shop.phoneMaxQuantity : this.config.shop.maxQuantityPerItem;
-      if (quantity < 1 || quantity > maxQuantity) {
-        throw new BizException(ErrorCode.PARAM_INVALID, `${input.sku_id} 数量需在 1~${maxQuantity} 之间`);
-      }
+      // if (quantity < 1 || quantity > maxQuantity) {
+      //   throw new BizException(ErrorCode.PARAM_INVALID, `${input.sku_id} 数量需在 1~${maxQuantity} 之间`);
+      // }
 
       const product = await this.productSync.requireActive(input.product_code, input.sku_id);
       if (product.stock !== null && product.stock < quantity) {
